@@ -198,21 +198,19 @@ export async function fetchProductsFromSheet(url) {
 }
 
 function readFromStorage() {
-  if (typeof window === "undefined") return sanitizeProducts(initialProducts);
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length) {
-        const existingIds = new Set(parsed.map((p) => p.id));
-        const missingDefaults = initialProducts.filter((p) => !existingIds.has(p.id));
-        return sanitizeProducts([...parsed, ...missingDefaults]);
+      if (Array.isArray(parsed)) {
+        return sanitizeProducts(parsed);
       }
     }
   } catch (e) {
-    /* fall through to defaults */
+    // Ignore corrupted storage and allow the app to load from the configured backend.
   }
-  return sanitizeProducts(initialProducts);
+  return [];
 }
 
 let products = readFromStorage();
@@ -246,8 +244,7 @@ export function updateProduct(id, patch) {
 }
 
 export function clearProductsLocal() {
-  const next = sanitizeProducts(initialProducts);
-  products = next;
+  products = [];
   try {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
@@ -259,7 +256,7 @@ export function clearProductsLocal() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(EVENT_NAME));
   }
-  return next;
+  return products;
 }
 
 if (typeof window !== "undefined") {
