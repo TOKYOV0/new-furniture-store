@@ -10,7 +10,16 @@ function read(key, fallback) {
 }
 
 export function getSales() { return read(STORAGE_KEY, []); }
-export function getSalesConfig() { return read(CONFIG_KEY, { webhookUrl: "" }); }
+const defaultSalesConfig = {
+  webhookUrl: import.meta.env.VITE_SALES_WEBHOOK_URL || "",
+};
+
+export function getSalesConfig() {
+  if (import.meta.env.VITE_SALES_WEBHOOK_URL) {
+    return { webhookUrl: import.meta.env.VITE_SALES_WEBHOOK_URL };
+  }
+  return read(CONFIG_KEY, { ...defaultSalesConfig });
+}
 
 export async function recordSale(sale) {
   const sales = getSales();
@@ -33,7 +42,12 @@ export function clearDemoSales() {
 }
 
 export function saveSalesConfig(config) {
-  if (typeof window !== "undefined") localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  if (typeof window !== "undefined") {
+    const nextConfig = {
+      webhookUrl: config?.webhookUrl || import.meta.env.VITE_SALES_WEBHOOK_URL || "",
+    };
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(nextConfig));
+  }
 }
 
 export async function syncSalesFromSheet() {

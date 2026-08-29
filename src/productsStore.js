@@ -11,20 +11,31 @@ const STORAGE_KEY = "grainhouse_products_v1";
 const CONFIG_KEY = "grainhouse_products_config_v1";
 const EVENT_NAME = "grainhouse-products-updated";
 
+const defaultProductsConfig = {
+  sheetUrl: import.meta.env.VITE_PRODUCT_SHEET_URL || "",
+};
+
 export function getProductsConfig() {
-  if (typeof window === "undefined") return { sheetUrl: "" };
+  if (import.meta.env.VITE_PRODUCT_SHEET_URL) {
+    return { sheetUrl: import.meta.env.VITE_PRODUCT_SHEET_URL };
+  }
+
+  if (typeof window === "undefined") return { ...defaultProductsConfig };
   try {
     const raw = window.localStorage.getItem(CONFIG_KEY);
-    return raw ? JSON.parse(raw) : { sheetUrl: "" };
+    return raw ? JSON.parse(raw) : { ...defaultProductsConfig };
   } catch {
-    return { sheetUrl: "" };
+    return { ...defaultProductsConfig };
   }
 }
 
 export function saveProductsConfig(config) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ sheetUrl: config?.sheetUrl || "" }));
+    const nextConfig = {
+      sheetUrl: config?.sheetUrl || import.meta.env.VITE_PRODUCT_SHEET_URL || "",
+    };
+    window.localStorage.setItem(CONFIG_KEY, JSON.stringify(nextConfig));
   } catch {
     // ignore storage failures
   }
