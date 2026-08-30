@@ -31,7 +31,7 @@ import {
   Menu,
   ExternalLink,
 } from "lucide-react";
-import { useProducts, saveProducts, normalizeImageUrl, getProductsConfig, saveProductsConfig, fetchProductsFromSheet, clearProductsLocal } from "./productsStore";
+import { useProducts, saveProducts, normalizeImageUrl, getProductsConfig, saveProductsConfig, fetchProductsFromSheet, clearProductsLocal, getMediaConfig, saveMediaConfig } from "./productsStore";
 import { useSales, getSalesConfig, saveSalesConfig, clearDemoSales, syncSalesFromSheet } from "./salesStore";
 
 /* ---------------------------------------------------------
@@ -446,10 +446,165 @@ function ProductsPage({ products }) {
   );
 }
 
+function MediaPage({ products }) {
+  const [mediaConfig, setMediaConfig] = useState(getMediaConfig());
+  const [saved, setSaved] = useState(false);
+  const [uploadingHero, setUploadingHero] = useState(false);
+  const categories = Array.from(new Set(products.map(p => p.category)));
+
+  const saveMediaSettings = () => {
+    saveMediaConfig(mediaConfig);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2600);
+  };
+
+  const uploadHeroImage = async (file) => {
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !uploadPreset) {
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Could not read file"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", uploadPreset);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error("Upload failed");
+    }
+
+    const data = await response.json();
+    return data.secure_url || data.url || "";
+  };
+
+  const updateHeroMedia = (url, type) => {
+    setMediaConfig({ ...mediaConfig, heroMedia: url, heroMediaType: type });
+  };
+
+  const handleHeroImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingHero(true);
+    try {
+      const uploadedUrl = await uploadHeroImage(file);
+      setMediaConfig({ ...mediaConfig, heroMedia: uploadedUrl, heroMediaType: "image" });
+      saveMediaConfig({ ...mediaConfig, heroMedia: uploadedUrl, heroMediaType: "image" });
+    } catch {
+      setMediaConfig({ ...mediaConfig, heroMedia: "", heroMediaType: "image" });
+    } finally {
+      setUploadingHero(false);
+      event.target.value = "";
+    }
+  };
+
+  const updateFeaturedImage = (category, url, type) => {
+    setMediaConfig({
+      ...mediaConfig,
+      featuredImages: { ...mediaConfig.featuredImages, [category]: url },
+      featuredMediaTypes: { ...mediaConfig.featuredMediaTypes, [category]: type }
+    });
+  };
+
+  return (
+    <div>
+      <div className="page-head">
+        <div>
+          <h1 style={{ fontFamily: fontVoice, fontSize: 24, fontWeight: 600, color: colors.ink900, margin: "0 0 4px" }}>
+            Media Management
+          </h1>
+          <p style={{ fontSize: 13.5, color: colors.ink600, margin: 0 }}>
+            Manage hero section media and featured category images/videos.
+          </p>
+        </div>
+        <button className="btn-primary" onClick={saveMediaSettings}><Save size={14}/> Save media</button>
+        {saved && (
+          <div className="toast">
+            <CheckCircle2 size={16} /> Saved
+          </div>
+        )}
+      </div>
+
+      <div className="chart-card" style={{marginBottom:18}}>
+        <p className="chart-title">Hero Section Image</p>
+        <p style={{fontSize:12.5,color:colors.ink600,margin:"0 0 14px"}}>Upload the homepage hero image. This is image-only and not URL-based.</p>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleHeroImageUpload}
+            className="text-input"
+            style={{flex:1,minWidth:260,padding:"10px 12px"}}
+          />
+          {uploadingHero && (
+            <span style={{fontSize:12.5,color:colors.ink600}}>Uploading...</span>
+          )}
+        </div>
+        {mediaConfig.heroMedia && (
+          <div style={{width:"100%",height:"240px",background:colors.linen200,borderRadius:"4px",overflow:"hidden",marginBottom:12}}>
+            <img src={mediaConfig.heroMedia} alt="Hero preview" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={(e) => e.currentTarget.style.opacity = 0.3}/>
+          </div>
+        )}
+      </div>
+
+      <div className="chart-card">
+        <p className="chart-title">Featured Category Images</p>
+        <p style={{fontSize:12.5,color:colors.ink600,margin:"0 0 14px"}}>Upload an image or video URL for each category's featured section.</p>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {categories.map(category => (
+            <div key={category} style={{borderBottom:`1px solid ${colors.linen200}`,paddingBottom:14}}>
+              <label style={{display:"block",fontSize:12.5,fontWeight:600,color:colors.ink900,marginBottom:6}}>{category}</label>
+              <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap",alignItems:"center"}}>
+                <input 
+                  className="text-input" 
+                  placeholder="URL (image or video)" 
+                  value={mediaConfig.featuredImages[category] || ""}
+                  onChange={e => updateFeaturedImage(category, e.target.value, mediaConfig.featuredMediaTypes[category] || "image")}
+                  style={{flex:"1 1 260px",minWidth:260}}
+                />
+                <select 
+                  className="text-input"
+                  value={mediaConfig.featuredMediaTypes[category] || "image"}
+                  onChange={e => updateFeaturedImage(category, mediaConfig.featuredImages[category] || "", e.target.value)}
+                  style={{minWidth:120,flexShrink:0}}
+                >
+                  <option value="image">Image</option>
+                  <option value="video">Video</option>
+                </select>
+              </div>
+              {mediaConfig.featuredImages[category] && (
+                <div style={{width:"100%",height:"160px",background:colors.linen200,borderRadius:"4px",overflow:"hidden",marginTop:8}}>
+                  {(mediaConfig.featuredMediaTypes[category] || "image") === "video" ? (
+                    <video src={mediaConfig.featuredImages[category]} style={{width:"100%",height:"100%",objectFit:"cover"}} controls />
+                  ) : (
+                    <img src={mediaConfig.featuredImages[category]} alt={`${category} featured`} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={(e) => e.currentTarget.style.opacity = 0.3}/>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Sidebar({ page, setPage, onLogout, onViewSite, navOpen, setNavOpen }) {
   const items = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "products", label: "Products", icon: Package },
+    { id: "media", label: "Media", icon: ImagePlus },
   ];
   return (
     <div className="sidebar">
@@ -666,6 +821,7 @@ export default function FurnitureAdminApp({ onNavigateHome }) {
           <div className="main-content">
             {page === "dashboard" && <Dashboard products={products} sales={sales} />}
             {page === "products" && <ProductsPage products={products} />}
+            {page === "media" && <MediaPage products={products} />}
           </div>
         </div>
       )}

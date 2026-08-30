@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Menu, X, Sofa, ArrowRight, Search, ShoppingCart, Plus, Minus, Trash2 } from "lucide-react";
-import { useProducts } from "./productsStore";
+import { useProducts, getMediaConfig } from "./productsStore";
 import { recordSale } from "./salesStore";
 
 const colors = {
@@ -41,11 +41,56 @@ function GrainMark({ size = 120, stroke = colors.oak500, opacity = 1 }) {
   return <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ opacity }}>{rings.map((r, i) => <circle key={i} cx={cx + (i % 2 === 0 ? 1 : -1) * 1.5} cy={cy} r={(size / 2) * r} fill="none" stroke={stroke} strokeWidth={i === rings.length - 1 ? 3 : 1.1} opacity={1 - i * 0.09} />)}</svg>;
 }
 
-function Header({ onNavigateAdmin, navOpen, setNavOpen, search, setSearch, cartCount, onCart }) {
+function Header({ onNavigateAdmin, navOpen, setNavOpen, search, setSearch, cartCount, onCart, products, onProductClick }) {
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const normalizedSearch = (search || "").trim().toLowerCase();
+  const searchResults = normalizedSearch ? products.filter(p => 
+    p.name.toLowerCase().includes(normalizedSearch) || 
+    p.category.toLowerCase().includes(normalizedSearch) ||
+    p.description.toLowerCase().includes(normalizedSearch)
+  ).slice(0, 8) : [];
+
   return <header className="site-header"><div className="site-header-inner">
     <a href="#top" className="brand" onClick={() => setNavOpen(false)}><div className="brand-mark"><img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" /></div><span>SHUKARWAAR</span></a>
     <div className="header-actions">
-      <div className="search-box"><Search size={15} /><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div>
+      <div style={{position:"relative"}}>
+        <div className="search-box" style={{position:"relative"}}><Search size={15} /><input aria-label="Search furniture" value={search} onChange={e => {setSearch(e.target.value); setShowSearchDropdown(true);}} onFocus={() => setShowSearchDropdown(true)} placeholder="Search furniture..." /></div>
+        {showSearchDropdown && normalizedSearch && searchResults.length > 0 && (
+          <div style={{position:"absolute",top:"100%",left:0,right:0,background:colors.linen50,border:`1px solid ${colors.linen200}`,borderRadius:"4px",marginTop:"4px",maxHeight:"400px",overflowY:"auto",zIndex:1000,boxShadow:"0 8px 16px rgba(0,0,0,0.15)"}}>
+            {searchResults.map(product => (
+              <button 
+                key={product.id}
+                onClick={() => {
+                  onProductClick(product.id);
+                  setSearch("");
+                  setShowSearchDropdown(false);
+                }}
+                style={{
+                  display:"flex",
+                  alignItems:"center",
+                  gap:"12px",
+                  width:"100%",
+                  padding:"10px 12px",
+                  background:"transparent",
+                  border:"none",
+                  borderBottom:`1px solid ${colors.linen200}`,
+                  cursor:"pointer",
+                  textAlign:"left",
+                  transition:"background .2s ease"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = colors.linen100}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                <img src={product.image} alt={product.name} style={{width:"40px",height:"40px",objectFit:"cover",borderRadius:"3px"}} onError={(e) => e.currentTarget.src = FALLBACK_IMAGE}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{margin:0,fontSize:"12.5px",fontWeight:600,color:colors.ink900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{product.name}</p>
+                  <p style={{margin:"2px 0 0",fontSize:"11px",color:colors.ink600}}>{product.category}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <button className="cart-button" onClick={onCart} aria-label={`Cart with ${cartCount} items`}><ShoppingCart size={17} /><span className="cart-label">Cart</span>{cartCount > 0 && <b>{cartCount}</b>}</button>
       <nav className={`site-nav ${navOpen ? "open" : ""}`}><a href="#shop" onClick={() => setNavOpen(false)}>Shop</a><a href="#about" onClick={() => setNavOpen(false)}>About</a><a href="#footer" onClick={() => setNavOpen(false)}>Contact</a></nav>
       <button className="menu-btn" aria-label="Toggle menu" onClick={() => setNavOpen(v => !v)}>{navOpen ? <X size={20} color={colors.linen50}/> : <Menu size={20} color={colors.linen50}/>}</button>
@@ -53,7 +98,7 @@ function Header({ onNavigateAdmin, navOpen, setNavOpen, search, setSearch, cartC
   </div></header>;
 }
 
-function Hero({ heroImage }) { return <section className="hero" id="top"><div className="hero-copy"><p className="hero-eyebrow">Handcrafted furniture</p><h1 className="hero-title">Furniture that grows with your home.</h1><p className="hero-sub">Solid wood pieces, finished by hand and built to age well — from dining tables to reading chairs.</p><a href="#shop" className="hero-cta">Shop the collection <ArrowRight size={15}/></a></div><div className="hero-media"><img src={heroImage} alt="Featured furniture piece"/><div className="hero-grain"><GrainMark size={140} stroke={colors.linen50} opacity={0.5}/></div></div></section>; }
+function Hero({ heroImage, heroMediaType }) { return <section className="hero" id="top"><div className="hero-copy"><p className="hero-eyebrow">Handcrafted furniture</p><h1 className="hero-title">Furniture that grows with your home.</h1><p className="hero-sub">Solid wood pieces, finished by hand and built to age well — from dining tables to reading chairs.</p><a href="#shop" className="hero-cta">Shop the collection <ArrowRight size={15}/></a></div><div className="hero-media">{heroMediaType === "video" ? <video src={heroImage} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} controls autoPlay muted /> : <img src={heroImage} alt="Featured furniture piece"/>}<div className="hero-grain"><GrainMark size={140} stroke={colors.linen50} opacity={0.5}/></div></div></section>; }
 
 function ProductCard({ product, onOpen, onAdd }) { return <article className="p-card"><button className="p-card-main" onClick={() => onOpen(product)}><div className="p-image"><img src={product.image} alt={product.name}/></div><div className="p-body"><p className="p-category">{product.category}</p><p className="p-name">{product.name}</p><p className="p-price">{currency(product.price)}</p></div></button><button className="add-cart" onClick={() => onAdd(product)}><Plus size={15}/> Add to cart</button></article>; }
 
@@ -106,7 +151,8 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
       return searchMatches(category.name) || category.items.some((item) => searchMatches(item.name) || searchMatches(item.description) || searchMatches(item.category));
     });
   }, [categoryCards, normalizedSearch]);
-  const heroImage = products[0]?.image;
+  const mediaConfig = getMediaConfig();
+  const heroImage = mediaConfig.heroMedia || products[0]?.image;
   const activeProductId = selectedProductId || detailId;
   const selectedProduct = products.find(p => p.id === activeProductId) || null;
   const selectedCategory = selectedCategoryName || selectedCategoryLocal;
@@ -258,8 +304,40 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
       @media(max-width:850px){.hero{grid-template-columns:1fr}.hero-media{order:-1}.p-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.category-grid{grid-template-columns:1fr}.site-nav{display:none;position:absolute;top:62px;left:0;right:0;background:${colors.walnut950};padding:12px 22px 18px;flex-direction:column;align-items:stretch}.site-nav.open{display:flex}.menu-btn{display:block}.header-actions{margin-left:auto}.search-box{width:min(240px,45vw)}}
       @media(max-width:560px){.cart-label{display:none}.search-box{width:42vw}.site-header-inner{gap:8px}.hero{padding-top:30px}.hero-media{aspect-ratio:16/11}.p-grid{grid-template-columns:1fr}.shop-section{padding-bottom:55px}}
     `}</style>
-    <Header onNavigateAdmin={onNavigateAdmin} navOpen={navOpen} setNavOpen={setNavOpen} search={search} setSearch={setSearch} cartCount={cartCount} onCart={() => setCartOpen(true)}/>
-    <Hero heroImage={heroImage}/>
+    <Header onNavigateAdmin={onNavigateAdmin} navOpen={navOpen} setNavOpen={setNavOpen} search={search} setSearch={setSearch} cartCount={cartCount} onCart={() => setCartOpen(true)} products={products} onProductClick={openProduct}/>
+    <div style={{width:"100%",background:colors.linen200,padding:"0",position:"sticky",top:"62px",zIndex:29,borderBottom:`1px solid ${colors.linen200}`}}>
+      <div style={{maxWidth:"1440px",margin:"auto",padding:"0 clamp(18px,5vw,70px)"}}>
+        <div style={{display:"flex",overflowX:"auto",gap:"24px",paddingY:"14px",scrollBehavior:"smooth"}}>
+          {filteredCategoryCards.map((category) => (
+            <button
+              key={category.name}
+              onClick={() => {
+                const element = document.getElementById(`category-${category.name}`);
+                if (element) {
+                  element.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+              }}
+              style={{
+                background:"transparent",
+                border:"none",
+                color:colors.ink600,
+                fontSize:"13.5px",
+                fontWeight:600,
+                padding:"10px 0",
+                cursor:"pointer",
+                whiteSpace:"nowrap",
+                transition:"color .2s ease"
+              }}
+              onMouseEnter={(e) => e.target.style.color = colors.oak600}
+              onMouseLeave={(e) => e.target.style.color = colors.ink600}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+    <Hero heroImage={heroImage} heroMediaType={mediaConfig.heroMediaType}/>
     <section className="shop-section" id="shop">
       <div className="shop-head">
         <div>
@@ -270,6 +348,67 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
       <div className="category-grid">{filteredCategoryCards.map(category => <button key={category.name} className="category-card" onClick={() => openCategory(category.name)}><ProductImage src={category.image || FALLBACK_IMAGE} alt={category.name} /><div className="overlay"><div className="meta"><strong>{category.name}</strong><span>{category.count} items</span></div></div></button>)}</div>
       {filteredCategoryCards.length === 0 && <div style={{padding:"50px 0",textAlign:"center",color:colors.ink600}}>{normalizedSearch ? "No results match your search." : "No categories available."}</div>}
     </section>
+
+    <section className="featured-section" style={{width:"100%",maxWidth:"1440px",margin:"auto",padding:"60px clamp(18px,5vw,70px) 80px"}}>
+      <div className="featured-head" style={{marginBottom:"48px"}}>
+        <p className="shop-title" style={{fontFamily:fontVoice,fontSize:"clamp(24px,3vw,34px)",fontWeight:600,margin:"0 0 4px"}}>Featured Collections</p>
+        <p className="shop-sub" style={{fontSize:"13.5px",color:colors.ink600,margin:0}}>Explore our curated selections by category.</p>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:"72px"}}>
+        {filteredCategoryCards.map((category) => {
+          const categoryItems = category.items;
+          const featuredItem = categoryItems[0];
+          const relatedItems = categoryItems.slice(1);
+          return (
+            <div key={category.name} id={`category-${category.name}`} style={{display:"flex",flexDirection:"column"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"12px",margin:"0 0 20px",justifyContent:"flex-start"}}>
+                <p style={{fontSize:"clamp(18px,2.5vw,28px)",fontFamily:fontVoice,color:colors.oak600,textTransform:"uppercase",letterSpacing:"2px",fontWeight:700,margin:0,whiteSpace:"nowrap"}}>
+                  {category.name}
+                </p>
+                <div style={{flex:1,height:"1px",background:colors.oak300}}></div>
+              </div>
+              
+              <button 
+                onClick={() => openCategory(category.name)}
+                style={{border:"none",background:"transparent",padding:0,cursor:"pointer",marginBottom:"28px"}}
+              >
+                <div style={{width:"100%",height:"480px",background:colors.linen200,borderRadius:"8px",overflow:"hidden",marginBottom:"18px"}}>
+                  {(mediaConfig.featuredMediaTypes?.[category.name] || "image") === "video" && mediaConfig.featuredImages[category.name] ? (
+                    <video src={mediaConfig.featuredImages[category.name]} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} controls />
+                  ) : (
+                    <ProductImage src={mediaConfig.featuredImages[category.name] || featuredItem?.image || FALLBACK_IMAGE} alt={featuredItem?.name || category.name} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",transition:"transform .3s"}}/>
+                  )}
+                </div>
+                <p style={{fontSize:"14px",fontFamily:fontVoice,fontWeight:600,color:colors.ink900,margin:"0 0 6px",textAlign:"left"}}>
+                  {featuredItem?.name || "Featured Item"}
+                </p>
+              </button>
+
+              {relatedItems.length > 0 && (
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"16px"}}>
+                  {relatedItems.slice(0,16).map((item,i) => (
+                    <button 
+                      key={i}
+                      onClick={() => openProduct(item.id)}
+                      style={{border:"none",background:"transparent",padding:0,cursor:"pointer",textAlign:"left"}}
+                    >
+                      <div style={{width:"100%",height:"280px",background:colors.linen200,borderRadius:"6px",overflow:"hidden",marginBottom:"10px"}}>
+                        <ProductImage src={item?.image || FALLBACK_IMAGE} alt={item?.name || "Item"} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",transition:"transform .3s"}}/>
+                      </div>
+                      <p style={{fontSize:"13px",color:colors.ink900,margin:0,fontWeight:500,wordBreak:"break-word"}}>
+                        {item?.name || "Item"}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+
     <footer className="site-footer" id="footer"><p style={{margin:0}}>Grain House — handcrafted furniture. © 2026</p></footer>
     {cartNotice && <div className="cart-toast">{cartNotice}</div>}
     {cartOpen && <div className="cart-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={e => e.stopPropagation()}><div className="cart-head"><h2>Your cart</h2><button onClick={() => setCartOpen(false)}><X size={19}/></button></div>{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={34}/><p>Your cart is empty.</p><span>Add furniture from the collection to get started.</span></div> : <><div className="cart-items">{cart.map(item => <div className="cart-item" key={item.id}><img src={item.image} alt={item.name}/><div className="cart-item-info"><strong>{item.name}</strong><span>{currency(item.price)}</span><div className="qty"><button onClick={() => changeQty(item.id, -1)}><Minus size={13}/></button><b>{item.qty}</b><button onClick={() => changeQty(item.id, 1)}><Plus size={13}/></button><button className="remove" onClick={() => changeQty(item.id, -item.qty)}><Trash2 size={13}/></button></div></div></div>)}</div><div className="cart-total"><span>Total</span><strong>{currency(cart.reduce((sum, item) => sum + item.price * item.qty, 0))}</strong></div><button className="checkout-btn" onClick={checkout}>Record sale (demo)</button></>}</aside></div>}

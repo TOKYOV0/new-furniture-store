@@ -9,10 +9,18 @@ import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "grainhouse_products_v1";
 const CONFIG_KEY = "grainhouse_products_config_v1";
+const MEDIA_KEY = "grainhouse_media_config_v1";
 const EVENT_NAME = "grainhouse-products-updated";
 
 const defaultProductsConfig = {
   sheetUrl: import.meta.env.VITE_PRODUCT_SHEET_URL || "",
+};
+
+const defaultMediaConfig = {
+  heroMedia: "",
+  heroMediaType: "image",
+  featuredImages: {},
+  featuredMediaTypes: {},
 };
 
 export function getProductsConfig() {
@@ -36,6 +44,31 @@ export function saveProductsConfig(config) {
       sheetUrl: config?.sheetUrl || import.meta.env.VITE_PRODUCT_SHEET_URL || "",
     };
     window.localStorage.setItem(CONFIG_KEY, JSON.stringify(nextConfig));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+export function getMediaConfig() {
+  if (typeof window === "undefined") return { ...defaultMediaConfig };
+  try {
+    const raw = window.localStorage.getItem(MEDIA_KEY);
+    return raw ? JSON.parse(raw) : { ...defaultMediaConfig };
+  } catch {
+    return { ...defaultMediaConfig };
+  }
+}
+
+export function saveMediaConfig(config) {
+  if (typeof window === "undefined") return;
+  try {
+    const nextConfig = {
+      heroMedia: config?.heroMedia || "",
+      heroMediaType: config?.heroMediaType || "image",
+      featuredImages: config?.featuredImages || {},
+      featuredMediaTypes: config?.featuredMediaTypes || {},
+    };
+    window.localStorage.setItem(MEDIA_KEY, JSON.stringify(nextConfig));
   } catch {
     // ignore storage failures
   }
