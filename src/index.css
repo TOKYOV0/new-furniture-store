@@ -71,7 +71,7 @@ button { cursor: pointer; }
 .mobile-search-results strong, .mobile-search-results small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-search-results strong { font-size: 12px; }
 .mobile-search-results small { color: #6E5D48; font-size: 10px; }
-.featured-related-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.featured-related-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; width: 100%; }
 
 @media (max-width: 850px) {
 	.header-search-desktop, .header-actions > .search-box { display: none !important; }

@@ -12,6 +12,7 @@ const fontVoice = `"Fraunces", "Georgia", serif`;
 const fontBody = `"Inter", "Helvetica Neue", sans-serif`;
 const currency = (n) => Number(n || 0).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=1200&q=80";
+const userInitials = (name = "") => String(name).trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join("") || "U";
 
 function ProductImage({ src, alt, className = "", style = {} }) {
   const [currentSrc, setCurrentSrc] = useState(src || FALLBACK_IMAGE);
@@ -93,7 +94,7 @@ function Header({ onNavigateAdmin, navOpen, setNavOpen, search, setSearch, cartC
         )}
       </div>
       <button className="cart-button" onClick={onCart} aria-label={`Cart with ${cartCount} items`}><ShoppingCart size={17} /><span className="cart-label">Cart</span>{cartCount > 0 && <b>{cartCount}</b>}</button>
-      <button className="login-button" onClick={user ? onAccount : onLogin}><LogIn size={15}/><span>{user?.name || "Login"}</span></button>
+      <button className="login-button" onClick={user ? onAccount : onLogin}><LogIn size={15}/><span>{user ? userInitials(user.name) : "Login"}</span></button>
       <nav className={`site-nav ${navOpen ? "open" : ""}`}>
         <div className="mobile-nav-search-wrap"><div className="mobile-nav-search"><Search size={15}/><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setShowSearchDropdown(true)} placeholder="Search furniture..." /></div>{showSearchDropdown && normalizedSearch && searchResults.length > 0 && <div className="mobile-search-results">{searchResults.map(product => <button key={product.id} onClick={() => { onProductClick(product.id); setSearch(""); setShowSearchDropdown(false); setNavOpen(false); }}><img src={product.image} alt={product.name} onError={e => e.currentTarget.src = FALLBACK_IMAGE}/><span><strong>{product.name}</strong><small>{product.category}</small></span></button>)}</div>}</div>
         <a href="#shop" onClick={() => setNavOpen(false)}>Shop</a><a href="#about" onClick={() => setNavOpen(false)}>About</a><a href="#footer" onClick={() => setNavOpen(false)}>Contact</a>
@@ -392,7 +393,7 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
         <div className="header-actions">
           <div className="search-box"><Search size={15} /><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div>
           <button className="cart-button" onClick={() => setCartOpen(true)} aria-label={`Cart with ${cartCount} items`}><ShoppingCart size={17} /><span className="cart-label">Cart</span>{cartCount > 0 && <b>{cartCount}</b>}</button>
-          <button className="login-button" onClick={user ? onNavigateAccount : openLogin}><LogIn size={15}/><span>{user?.name || "Login"}</span></button>
+          <button className="login-button" onClick={user ? onNavigateAccount : openLogin}><LogIn size={15}/><span>{user ? userInitials(user.name) : "Login"}</span></button>
           <nav className={`site-nav ${navOpen ? "open" : ""}`}><div className="mobile-nav-search"><Search size={15}/><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div><a href="#shop" onClick={e => { e.preventDefault(); openHome(); }}>Shop</a><a href="#about" onClick={e => e.preventDefault()}>About</a><a href="#footer" onClick={e => e.preventDefault()}>Contact</a></nav>
           <button className="menu-btn" aria-label="Toggle menu" onClick={() => setNavOpen(v => !v)}>{navOpen ? <X size={20} color={colors.linen50}/> : <Menu size={20} color={colors.linen50}/>}</button>
         </div>
@@ -428,7 +429,7 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
         <div className="header-actions">
           <div className="search-box"><Search size={15} /><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div>
           <button className="cart-button" onClick={() => setCartOpen(true)} aria-label={`Cart with ${cartCount} items`}><ShoppingCart size={17} /><span className="cart-label">Cart</span>{cartCount > 0 && <b>{cartCount}</b>}</button>
-          <button className="login-button" onClick={user ? onNavigateAccount : openLogin}><LogIn size={15}/><span>{user?.name || "Login"}</span></button>
+          <button className="login-button" onClick={user ? onNavigateAccount : openLogin}><LogIn size={15}/><span>{user ? userInitials(user.name) : "Login"}</span></button>
           <nav className={`site-nav ${navOpen ? "open" : ""}`}><div className="mobile-nav-search"><Search size={15}/><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div><a href="#shop" onClick={e => { e.preventDefault(); openHome(); }}>Shop</a><a href="#about" onClick={e => e.preventDefault()}>About</a><a href="#footer" onClick={e => e.preventDefault()}>Contact</a></nav>
           <button className="menu-btn" aria-label="Toggle menu" onClick={() => setNavOpen(v => !v)}>{navOpen ? <X size={20} color={colors.linen50}/> : <Menu size={20} color={colors.linen50}/>}</button>
         </div>
