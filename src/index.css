@@ -62,8 +62,21 @@ button { cursor: pointer; }
 .login-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 11px; border: 1px solid #54371C; border-radius: 4px; background: transparent; color: #DDB07E; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .mobile-nav-search { display: none; align-items: center; gap: 8px; padding: 9px 11px; border: 1px solid #54371C; border-radius: 4px; background: #FBF6EE; color: #9C8B74; }
 .mobile-nav-search input { width: 100%; border: 0; outline: 0; background: transparent; color: #241B12; font-size: 13px; }
+.mobile-nav-search-wrap { position: relative; }
+.mobile-search-results { position: absolute; top: calc(100% + 5px); left: 0; right: 0; max-height: 280px; overflow-y: auto; border: 1px solid #E9DAC0; border-radius: 4px; background: #FBF6EE; box-shadow: 0 10px 24px rgba(0,0,0,.18); z-index: 2; }
+.mobile-search-results button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-bottom: 1px solid #E9DAC0; background: transparent; color: #241B12; text-align: left; }
+.mobile-search-results button:last-child { border-bottom: 0; }
+.mobile-search-results img { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 3px; object-fit: cover; }
+.mobile-search-results span { display: grid; min-width: 0; gap: 3px; }
+.mobile-search-results strong, .mobile-search-results small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-search-results strong { font-size: 12px; }
+.mobile-search-results small { color: #6E5D48; font-size: 10px; }
+.featured-related-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 
 @media (max-width: 850px) {
 	.header-search-desktop, .header-actions > .search-box { display: none !important; }
 	.site-nav.open .mobile-nav-search { display: flex; }
+	.site-nav.open .mobile-nav-search-wrap { display: block; }
 }
+@media (max-width: 700px) { .featured-related-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; } }
+@media (max-width: 480px) { .featured-related-grid { grid-template-columns: 1fr; } }

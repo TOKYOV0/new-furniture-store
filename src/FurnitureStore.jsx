@@ -95,7 +95,7 @@ function Header({ onNavigateAdmin, navOpen, setNavOpen, search, setSearch, cartC
       <button className="cart-button" onClick={onCart} aria-label={`Cart with ${cartCount} items`}><ShoppingCart size={17} /><span className="cart-label">Cart</span>{cartCount > 0 && <b>{cartCount}</b>}</button>
       <button className="login-button" onClick={user ? onAccount : onLogin}><LogIn size={15}/><span>{user?.name || "Login"}</span></button>
       <nav className={`site-nav ${navOpen ? "open" : ""}`}>
-        <div className="mobile-nav-search"><Search size={15}/><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div>
+        <div className="mobile-nav-search-wrap"><div className="mobile-nav-search"><Search size={15}/><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setShowSearchDropdown(true)} placeholder="Search furniture..." /></div>{showSearchDropdown && normalizedSearch && searchResults.length > 0 && <div className="mobile-search-results">{searchResults.map(product => <button key={product.id} onClick={() => { onProductClick(product.id); setSearch(""); setShowSearchDropdown(false); setNavOpen(false); }}><img src={product.image} alt={product.name} onError={e => e.currentTarget.src = FALLBACK_IMAGE}/><span><strong>{product.name}</strong><small>{product.category}</small></span></button>)}</div>}</div>
         <a href="#shop" onClick={() => setNavOpen(false)}>Shop</a><a href="#about" onClick={() => setNavOpen(false)}>About</a><a href="#footer" onClick={() => setNavOpen(false)}>Contact</a>
       </nav>
       <button className="menu-btn" aria-label="Toggle menu" onClick={() => setNavOpen(v => !v)}>{navOpen ? <X size={20} color={colors.linen50}/> : <Menu size={20} color={colors.linen50}/>}</button>
@@ -476,38 +476,6 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
       @media(max-width:560px){.cart-label{display:none}.search-box{width:42vw}.site-header-inner{gap:8px}.hero{padding-top:30px}.hero-media{aspect-ratio:16/11}.p-grid{grid-template-columns:1fr}.shop-section{padding-bottom:55px}}
     `}</style>
     <Header onNavigateAdmin={onNavigateAdmin} navOpen={navOpen} setNavOpen={setNavOpen} search={search} setSearch={setSearch} cartCount={cartCount} onCart={() => setCartOpen(true)} onLogin={openLogin} onAccount={onNavigateAccount} user={user} products={products} onProductClick={openProduct}/>
-    <div style={{width:"100%",background:colors.linen200,padding:"0",position:"sticky",top:"62px",zIndex:29,borderBottom:`1px solid ${colors.linen200}`}}>
-      <div style={{maxWidth:"1440px",margin:"auto",padding:"0 clamp(18px,5vw,70px)"}}>
-        <div style={{display:"flex",overflowX:"auto",gap:"24px",paddingY:"14px",scrollBehavior:"smooth"}}>
-          {filteredCategoryCards.map((category) => (
-            <button
-              key={category.name}
-              onClick={() => {
-                const element = document.getElementById(`category-${category.name}`);
-                if (element) {
-                  element.scrollIntoView({ behavior: "smooth", block: "start" });
-                }
-              }}
-              style={{
-                background:"transparent",
-                border:"none",
-                color:colors.ink600,
-                fontSize:"13.5px",
-                fontWeight:600,
-                padding:"10px 0",
-                cursor:"pointer",
-                whiteSpace:"nowrap",
-                transition:"color .2s ease"
-              }}
-              onMouseEnter={(e) => e.target.style.color = colors.oak600}
-              onMouseLeave={(e) => e.target.style.color = colors.ink600}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
     <Hero heroImage={heroImage} heroMediaType={mediaConfig.heroMediaType}/>
     <section className="shop-section" id="shop">
       <div className="shop-head">
@@ -557,7 +525,7 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
               </button>
 
               {relatedItems.length > 0 && (
-                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"16px"}}>
+                <div className="featured-related-grid">
                   {relatedItems.slice(0,16).map((item,i) => (
                     <button 
                       key={i}
