@@ -30,9 +30,12 @@ import {
   ChevronRight,
   Menu,
   ExternalLink,
+  Users,
+  MapPin,
 } from "lucide-react";
 import { useProducts, saveProducts, normalizeImageUrl, getProductsConfig, saveProductsConfig, fetchProductsFromSheet, clearProductsLocal, getMediaConfig, saveMediaConfig } from "./productsStore";
 import { useSales, getSalesConfig, saveSalesConfig, clearDemoSales, syncSalesFromSheet } from "./salesStore";
+import { fetchUsers, updateUser, deleteUser, getUsersConfig, saveUsersConfig } from "./authStore";
 
 /* ---------------------------------------------------------
    DESIGN TOKENS — "Grain" theme, inspired by walnut, oak
@@ -446,6 +449,90 @@ function ProductsPage({ products }) {
   );
 }
 
+function UsersPage() {
+  const [users, setUsers] = useState([]);
+  const [config, setConfig] = useState(getUsersConfig());
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const sync = async () => {
+    setLoading(true);
+    try { setUsers(await fetchUsers()); setMessage("Users synced from Google Sheets."); }
+    catch (error) { setMessage(error.message); }
+    finally { setLoading(false); }
+  };
+  const saveConfigAndSync = async () => { saveUsersConfig(config); await sync(); };
+  const editUser = async (user, field, value) => {
+    try { const next = await updateUser({ id: user.id, [field]: value }); setUsers(current => current.map(item => item.id === next.id ? next : item)); setMessage("User updated."); }
+    catch (error) { setMessage(error.message); }
+  };
+  const changePassword = async (user) => {
+    const password = window.prompt(`New password for ${user.email}`);
+    if (!password) return;
+    await editUser(user, "password", password);
+  };
+  const removeUser = async (user) => {
+    if (!window.confirm(`Delete ${user.email}?`)) return;
+    try { await deleteUser(user.id); setUsers(current => current.filter(item => item.id !== user.id)); setMessage("User deleted."); }
+    catch (error) { setMessage(error.message); }
+  };
+
+  React.useEffect(() => {
+    sync();
+  }, []);
+
+  return <div>
+    <div className="page-head"><div><h1 style={{fontFamily:fontVoice,fontSize:24,fontWeight:600,color:colors.ink900,margin:"0 0 4px"}}>User login data</h1><p style={{fontSize:13.5,color:colors.ink600,margin:0}}>Manage customer accounts created at checkout.</p></div><button className="btn-outline" disabled={loading} onClick={sync}>{loading ? "Syncing..." : "Sync users"}</button></div>
+    <div className="chart-card" style={{marginBottom:18}}><p className="chart-title">Users Google Sheets URL</p><p style={{fontSize:12.5,color:colors.ink600,margin:"0 0 12px"}}>Use the same deployed Apps Script URL configured for user registration and checkout login.</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><input className="text-input" style={{flex:1,minWidth:260}} placeholder="https://script.google.com/macros/s/.../exec" value={config.webhookUrl} onChange={event => setConfig({webhookUrl:event.target.value})}/><button className="btn-primary" onClick={saveConfigAndSync}><Save size={13}/> Save & sync</button></div>{message && <p style={{fontSize:12,color:message.includes("failed") || message.includes("configured") ? colors.rust600 : colors.sage600,margin:"10px 0 0"}}>{message}</p>}</div>
+    <div className="chart-card" style={{padding:0,overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}><thead><tr style={{textAlign:"left",color:colors.ink600,background:colors.linen100}}>{["Name","Email","Phone","Addresses","Provider","Status","Created","Actions"].map(label => <th key={label} style={{padding:"12px 14px",fontWeight:600,whiteSpace:"nowrap"}}>{label}</th>)}</tr></thead><tbody>{users.length ? users.map(user => <tr key={user.id} style={{borderTop:`1px solid ${colors.linen200}`}}><td style={{padding:"12px 14px",minWidth:140}}>{user.name}</td><td style={{padding:"12px 14px"}}>{user.email || "-"}</td><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}>{user.phone || "-"}</td><td style={{padding:"12px 14px",minWidth:220,maxWidth:320,whiteSpace:"pre-wrap"}}>{(user.addresses?.length ? user.addresses.map(item => `${item.label}: ${item.value}`).join("\n") : user.address) || "No address saved"}</td><td style={{padding:"12px 14px"}}>{user.provider}</td><td style={{padding:"12px 14px"}}><select className="text-input" value={user.status} onChange={event => editUser(user,"status",event.target.value)}><option value="active">Active</option><option value="blocked">Blocked</option></select></td><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "-"}</td><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}><button className="btn-outline" onClick={() => changePassword(user)} style={{marginRight:6}}><Lock size={13}/> Password</button><button className="btn-outline" onClick={() => removeUser(user)} style={{color:colors.rust600}}><Trash2 size={13}/> Delete</button></td></tr>) : <tr><td colSpan="8" style={{padding:24,textAlign:"center",color:colors.ink600}}>Save the Apps Script URL and sync to load users.</td></tr>}</tbody></table></div>
+  </div>;
+}
+
+function AddressPage() {
+  const [users, setUsers] = useState([]);
+  const [drafts, setDrafts] = useState({});
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const sync = async () => {
+    setLoading(true);
+    try {
+      const nextUsers = await fetchUsers();
+      setUsers(nextUsers);
+      setDrafts(Object.fromEntries(nextUsers.map(user => {
+        const addresses = user.addresses?.length ? user.addresses : (user.address ? [{ label: "Home", value: user.address }] : [{ label: "Home", value: "" }]);
+        return [user.id, addresses];
+      })));
+      setMessage("Addresses loaded from Google Sheets.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    sync();
+  }, []);
+
+  const saveAddress = async (user) => {
+    try {
+      const next = await updateUser({ id: user.id, addresses: drafts[user.id] || [] });
+      setUsers(current => current.map(item => item.id === next.id ? next : item));
+      setDrafts(current => ({ ...current, [user.id]: next.addresses?.length ? next.addresses : [{label:"Home", value:next.address || ""}] }));
+      setMessage(`Address saved for ${next.name}.`);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
+
+  return <div>
+    <div className="page-head"><div><h1 style={{fontFamily:fontVoice,fontSize:24,fontWeight:600,color:colors.ink900,margin:"0 0 4px"}}>Customer addresses</h1><p style={{fontSize:13.5,color:colors.ink600,margin:0}}>Edit delivery addresses and save them directly to Google Sheets.</p></div><button className="btn-outline" disabled={loading} onClick={sync}>{loading ? "Loading..." : "Refresh addresses"}</button></div>
+    {message && <p style={{fontSize:12,color:message.includes("failed") || message.includes("configured") ? colors.rust600 : colors.sage600,margin:"0 0 14px"}}>{message}</p>}
+    <div style={{display:"grid",gap:14}}>{users.length ? users.map(user => <div className="chart-card" key={user.id} style={{margin:0}}><div style={{display:"grid",gridTemplateColumns:"minmax(180px,.7fr) minmax(260px,1.3fr) auto",gap:14,alignItems:"start"}}><div><p className="chart-title" style={{marginBottom:5}}>{user.name}</p><p style={{fontSize:12,color:colors.ink600,margin:0}}>{user.email || "No email"} · {user.phone || "No phone"}</p></div><div className="admin-address-list">{(drafts[user.id] || []).map((item,index) => <div className="admin-address-row" key={index}><input className="text-input" value={item.label} onChange={event => setDrafts(current => ({...current,[user.id]:current[user.id].map((entry,entryIndex)=>entryIndex === index ? {...entry,label:event.target.value} : entry)}))} placeholder="Label" /><textarea className="text-input" rows="2" value={item.value} onChange={event => setDrafts(current => ({...current,[user.id]:current[user.id].map((entry,entryIndex)=>entryIndex === index ? {...entry,value:event.target.value} : entry)}))} placeholder="Address" />{(drafts[user.id] || []).length > 1 && <button className="address-remove" onClick={() => setDrafts(current => ({...current,[user.id]:current[user.id].filter((_,entryIndex)=>entryIndex !== index)}))}>Remove</button>}</div>)}<button className="address-add" onClick={() => setDrafts(current => ({...current,[user.id]:[...(current[user.id] || []),{label:`Address ${(current[user.id] || []).length + 1}`,value:""}]}))}>+ Add address</button></div><button className="btn-primary" onClick={() => saveAddress(user)}><Save size={13}/> Save</button></div></div>) : <div className="chart-card"><p style={{margin:0,color:colors.ink600}}>No users found. Configure the Users Apps Script URL in the Users section.</p></div>}</div>
+  </div>;
+}
+
 function MediaPage({ products }) {
   const [mediaConfig, setMediaConfig] = useState(getMediaConfig());
   const [saved, setSaved] = useState(false);
@@ -605,6 +692,8 @@ function Sidebar({ page, setPage, onLogout, onViewSite, navOpen, setNavOpen }) {
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "products", label: "Products", icon: Package },
     { id: "media", label: "Media", icon: ImagePlus },
+    { id: "users", label: "Users", icon: Users },
+    { id: "addresses", label: "Addresses", icon: MapPin },
   ];
   return (
     <div className="sidebar">
@@ -822,6 +911,8 @@ export default function FurnitureAdminApp({ onNavigateHome }) {
             {page === "dashboard" && <Dashboard products={products} sales={sales} />}
             {page === "products" && <ProductsPage products={products} />}
             {page === "media" && <MediaPage products={products} />}
+            {page === "users" && <UsersPage />}
+            {page === "addresses" && <AddressPage />}
           </div>
         </div>
       )}

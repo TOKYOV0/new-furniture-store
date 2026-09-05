@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import FurnitureAdminApp from "./FurnitureAdmin";
-import FurnitureStore from "./FurnitureStore";
+import FurnitureStore, { UserAccountPage } from "./FurnitureStore";
 
 export default function App() {
   const [path, setPath] = useState(
@@ -22,12 +22,17 @@ export default function App() {
     return <FurnitureAdminApp onNavigateHome={() => navigate("/")} />;
   }
 
+  if (path.startsWith("/account")) {
+    return <UserAccountPage onNavigateHome={() => navigate("/")} />;
+  }
+
   if (path.startsWith("/category/")) {
     const categoryName = decodeURIComponent(path.replace("/category/", ""));
     return (
       <FurnitureStore
         onNavigateAdmin={() => navigate("/admin")}
         onNavigateHome={() => navigate("/")}
+        onNavigateAccount={() => navigate("/account")}
         onNavigateProduct={(id) => navigate(`/product/${id}`)}
         onNavigateCategory={(name) => navigate(`/category/${encodeURIComponent(name)}`)}
         selectedCategoryName={categoryName}
@@ -41,6 +46,7 @@ export default function App() {
       <FurnitureStore
         onNavigateAdmin={() => navigate("/admin")}
         onNavigateHome={() => navigate("/")}
+        onNavigateAccount={() => navigate("/account")}
         onNavigateProduct={(id) => navigate(`/product/${id}`)}
         onNavigateCategory={(name) => navigate(`/category/${encodeURIComponent(name)}`)}
         selectedProductId={productId}
@@ -52,6 +58,7 @@ export default function App() {
     <FurnitureStore
       onNavigateAdmin={() => navigate("/admin")}
       onNavigateHome={() => navigate("/")}
+      onNavigateAccount={() => navigate("/account")}
       onNavigateProduct={(id) => navigate(`/product/${id}`)}
       onNavigateCategory={(name) => navigate(`/category/${encodeURIComponent(name)}`)}
     />

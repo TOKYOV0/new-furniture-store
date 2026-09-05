@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { Menu, X, Sofa, ArrowRight, Search, ShoppingCart, Plus, Minus, Trash2 } from "lucide-react";
+import { Menu, X, Sofa, ArrowRight, Search, ShoppingCart, Plus, Minus, Trash2, LogIn } from "lucide-react";
 import { useProducts, getMediaConfig } from "./productsStore";
 import { recordSale } from "./salesStore";
+import { getUserSession, useUserSession, loginUser, registerUser, loginWithGoogle, updateUser, logoutUser } from "./authStore";
 
 const colors = {
   walnut950: "#221609", walnut900: "#2B1B0D", walnut800: "#3E2814", oak600: "#A66B36", oak500: "#C2884E", oak300: "#DDB07E",
@@ -41,7 +42,7 @@ function GrainMark({ size = 120, stroke = colors.oak500, opacity = 1 }) {
   return <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ opacity }}>{rings.map((r, i) => <circle key={i} cx={cx + (i % 2 === 0 ? 1 : -1) * 1.5} cy={cy} r={(size / 2) * r} fill="none" stroke={stroke} strokeWidth={i === rings.length - 1 ? 3 : 1.1} opacity={1 - i * 0.09} />)}</svg>;
 }
 
-function Header({ onNavigateAdmin, navOpen, setNavOpen, search, setSearch, cartCount, onCart, products, onProductClick }) {
+function Header({ onNavigateAdmin, navOpen, setNavOpen, search, setSearch, cartCount, onCart, onLogin, onAccount, user, products, onProductClick }) {
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const normalizedSearch = (search || "").trim().toLowerCase();
   const searchResults = normalizedSearch ? products.filter(p => 
@@ -53,7 +54,7 @@ function Header({ onNavigateAdmin, navOpen, setNavOpen, search, setSearch, cartC
   return <header className="site-header"><div className="site-header-inner">
     <a href="#top" className="brand" onClick={() => setNavOpen(false)}><div className="brand-mark"><img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" /></div><span>SHUKARWAAR</span></a>
     <div className="header-actions">
-      <div style={{position:"relative"}}>
+      <div className="header-search-desktop" style={{position:"relative"}}>
         <div className="search-box" style={{position:"relative"}}><Search size={15} /><input aria-label="Search furniture" value={search} onChange={e => {setSearch(e.target.value); setShowSearchDropdown(true);}} onFocus={() => setShowSearchDropdown(true)} placeholder="Search furniture..." /></div>
         {showSearchDropdown && normalizedSearch && searchResults.length > 0 && (
           <div style={{position:"absolute",top:"100%",left:0,right:0,background:colors.linen50,border:`1px solid ${colors.linen200}`,borderRadius:"4px",marginTop:"4px",maxHeight:"400px",overflowY:"auto",zIndex:1000,boxShadow:"0 8px 16px rgba(0,0,0,0.15)"}}>
@@ -92,7 +93,11 @@ function Header({ onNavigateAdmin, navOpen, setNavOpen, search, setSearch, cartC
         )}
       </div>
       <button className="cart-button" onClick={onCart} aria-label={`Cart with ${cartCount} items`}><ShoppingCart size={17} /><span className="cart-label">Cart</span>{cartCount > 0 && <b>{cartCount}</b>}</button>
-      <nav className={`site-nav ${navOpen ? "open" : ""}`}><a href="#shop" onClick={() => setNavOpen(false)}>Shop</a><a href="#about" onClick={() => setNavOpen(false)}>About</a><a href="#footer" onClick={() => setNavOpen(false)}>Contact</a></nav>
+      <button className="login-button" onClick={user ? onAccount : onLogin}><LogIn size={15}/><span>{user?.name || "Login"}</span></button>
+      <nav className={`site-nav ${navOpen ? "open" : ""}`}>
+        <div className="mobile-nav-search"><Search size={15}/><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div>
+        <a href="#shop" onClick={() => setNavOpen(false)}>Shop</a><a href="#about" onClick={() => setNavOpen(false)}>About</a><a href="#footer" onClick={() => setNavOpen(false)}>Contact</a>
+      </nav>
       <button className="menu-btn" aria-label="Toggle menu" onClick={() => setNavOpen(v => !v)}>{navOpen ? <X size={20} color={colors.linen50}/> : <Menu size={20} color={colors.linen50}/>}</button>
     </div>
   </div></header>;
@@ -109,7 +114,146 @@ function CartDrawer({ cart, onClose, onChange, onCheckout }) {
   return <div className="cart-backdrop" onClick={onClose}><aside className="cart-drawer" onClick={e => e.stopPropagation()}><div className="cart-head"><h2>Your cart</h2><button onClick={onClose}><X size={19}/></button></div>{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={34}/><p>Your cart is empty.</p><span>Add furniture from the collection to get started.</span></div> : <><div className="cart-items">{cart.map(item => <div className="cart-item" key={item.id}><img src={item.image} alt={item.name}/><div className="cart-item-info"><strong>{item.name}</strong><span>{currency(item.price)}</span><div className="qty"><button onClick={() => onChange(item.id, -1)}><Minus size={13}/></button><b>{item.qty}</b><button onClick={() => onChange(item.id, 1)}><Plus size={13}/></button><button className="remove" onClick={() => onChange(item.id, -item.qty)}><Trash2 size={13}/></button></div></div></div>)}</div><div className="cart-total"><span>Total</span><strong>{currency(total)}</strong></div><button className="checkout-btn" onClick={onCheckout}>Record sale (demo)</button></>}</aside></div>;
 }
 
-export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavigateProduct, onNavigateCategory, selectedProductId, selectedCategoryName }) {
+function AuthModal({ onClose, onSuccess }) {
+  const [mode, setMode] = useState("login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [busy, setBusy] = useState(false);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const user = mode === "login" ? await loginUser({ identifier: email, password }) : await registerUser({ name, email, phone, password });
+      if (mode === "register") {
+        setSuccess(`Account created. You are signed in as ${user.name}.`);
+        window.setTimeout(() => onSuccess(user), 900);
+      } else {
+        onSuccess(user);
+      }
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const googleSignIn = () => {
+    if (!googleClientId || !window.google?.accounts?.id) {
+      setError("Google login is not configured yet. Use email login or add VITE_GOOGLE_CLIENT_ID.");
+      return;
+    }
+    window.google.accounts.id.initialize({ client_id: googleClientId, callback: async ({ credential }) => {
+      setBusy(true);
+      setError("");
+      try { onSuccess(await loginWithGoogle(credential)); } catch (requestError) { setError(requestError.message); } finally { setBusy(false); }
+    }});
+    window.google.accounts.id.prompt();
+  };
+
+  React.useEffect(() => {
+    if (window.google?.accounts?.id) return;
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.onload = () => {};
+    document.head.appendChild(script);
+    return () => script.remove();
+  }, []);
+
+  return <div className="modal-backdrop" onClick={onClose}><div className="auth-card" onClick={event => event.stopPropagation()}>
+    <button className="modal-close" onClick={onClose} aria-label="Close"><X size={18}/></button>
+    <p className="modal-category">{mode === "login" ? "Sign in" : "Create account"}</p>
+    <h2 style={{fontFamily:fontVoice,margin:"0 0 8px",fontSize:28}}>{mode === "login" ? "Welcome back" : "Create your account"}</h2>
+    <p style={{fontSize:13,color:colors.ink600,margin:"0 0 20px"}}>Sign in to finish your order. Your account details are saved securely in the store spreadsheet.</p>
+    <button type="button" className="google-btn" onClick={googleSignIn} disabled={busy}><span className="google-mark">G</span> Continue with Google</button>
+    <div className="auth-divider"><span>or use email</span></div>
+    <form onSubmit={submit}>
+      {mode === "register" && <label className="auth-label">Full name<input className="auth-input" value={name} onChange={event => setName(event.target.value)} required /></label>}
+      <label className="auth-label">{mode === "login" ? "Email or phone number" : "Email address (optional)"}<input className="auth-input" type={mode === "login" ? "text" : "email"} value={email} onChange={event => setEmail(event.target.value)} required={mode === "login"} /></label>
+      {mode === "register" && <label className="auth-label">Phone number<input className="auth-input" type="tel" value={phone} onChange={event => setPhone(event.target.value)} /></label>}
+      <label className="auth-label">Password<input className="auth-input" type="password" minLength={6} value={password} onChange={event => setPassword(event.target.value)} required /></label>
+      {error && <p className="auth-error">{error}</p>}
+      {success && <p className="auth-success">{success}</p>}
+      <button className="hero-cta auth-submit" type="submit" disabled={busy || Boolean(success)}>{busy ? "Please wait..." : mode === "login" ? "Sign in" : "Create account"}</button>
+    </form>
+    <button className="auth-switch" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? "New here? Create an account" : "Already have an account? Sign in"}</button>
+  </div></div>;
+}
+
+function AccountModal({ user, onClose, inline = false }) {
+  const [section, setSection] = useState("details");
+  const [name, setName] = useState(user?.name || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [addresses, setAddresses] = useState(user?.addresses?.length ? user.addresses : (user?.address ? [{ label: "Home", value: user.address }] : [{ label: "Home", value: "" }]));
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const save = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      const profile = section === "details"
+        ? { name, email, phone }
+        : section === "address"
+          ? { addresses: addresses.filter(item => item.value.trim()) }
+          : { password };
+      const next = await updateUser({ id: user.id, ...profile });
+      setName(next.name || "");
+      setEmail(next.email || "");
+      setPhone(next.phone || "");
+      setAddresses(next.addresses?.length ? next.addresses : (next.address ? [{ label: "Home", value: next.address }] : [{ label: "Home", value: "" }]));
+      setPassword("");
+      setMessage("Changes saved.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    await logoutUser();
+    onClose();
+  };
+
+  return <div className={inline ? "account-page-panel" : "modal-backdrop"} onClick={inline ? undefined : onClose}><div className={inline ? "account-page-card" : "account-card"} onClick={event => event.stopPropagation()}>
+    <button className="modal-close" onClick={onClose} aria-label="Close"><X size={18}/></button>
+    <p className="modal-category">My account</p>
+    <h2 className="account-title">{user.name}</h2>
+    <div className="account-tabs"><button type="button" className={section === "details" ? "active" : ""} onClick={() => { setSection("details"); setMessage(""); setError(""); }}>Details</button><button type="button" className={section === "address" ? "active" : ""} onClick={() => { setSection("address"); setMessage(""); setError(""); }}>Address</button><button type="button" className={section === "security" ? "active" : ""} onClick={() => { setSection("security"); setMessage(""); setError(""); }}>Security</button></div>
+    <form onSubmit={save}>
+      {section === "details" && <><label className="auth-label">Full name<input className="auth-input" value={name} onChange={event => setName(event.target.value)} required /></label><label className="auth-label">Email address<input className="auth-input" type="email" value={email} onChange={event => setEmail(event.target.value)} /></label><label className="auth-label">Phone number<input className="auth-input" type="tel" value={phone} onChange={event => setPhone(event.target.value)} /></label></>}
+      {section === "address" && <div className="address-editor"><p className="account-note">Save more than one delivery address for faster checkout.</p>{addresses.map((item, index) => <div className="address-row" key={index}><label className="auth-label"><span>Address name</span><input className="auth-input" value={item.label} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, label: event.target.value} : entry))} placeholder="Home, Work..." /></label><label className="auth-label"><span>Full address</span><textarea className="auth-input account-textarea" value={item.value} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, value: event.target.value} : entry))} rows="3" placeholder="House, street, city, state and postal code" /></label>{addresses.length > 1 && <button type="button" className="address-remove" onClick={() => setAddresses(current => current.filter((_, entryIndex) => entryIndex !== index))}>Remove</button>}</div>)}<button type="button" className="address-add" onClick={() => setAddresses(current => [...current, { label: `Address ${current.length + 1}`, value: "" }])}>+ Add another address</button></div>}
+      {section === "security" && <><p className="account-note">Choose a new password for email or phone login.</p><label className="auth-label">New password<input className="auth-input" type="password" minLength={6} value={password} onChange={event => setPassword(event.target.value)} required /></label></>}
+      {error && <p className="auth-error">{error}</p>}
+      {message && <p className="auth-success">{message}</p>}
+      <button className="hero-cta auth-submit" type="submit" disabled={busy}>{busy ? "Saving..." : "Save changes"}</button>
+    </form>
+    <button className="account-signout" onClick={signOut}>Sign out</button>
+  </div></div>;
+}
+
+export function UserAccountPage({ onNavigateHome }) {
+  const user = useUserSession();
+  if (!user) {
+    return <div className="account-page-shell"><main className="account-empty"><h1>Sign in to view your account</h1><button className="hero-cta" onClick={onNavigateHome}>Return to store</button></main></div>;
+  }
+  return <div className="account-page-shell"><aside className="account-page-sidebar"><div className="account-sidebar-brand"><div className="brand-mark"><img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" /></div><span>SHUKARWAAR</span></div><p className="account-sidebar-label">Account</p><div className="account-sidebar-user"><strong>{user.name}</strong><span>{user.email || user.phone || "Customer"}</span></div><button className="account-back" onClick={onNavigateHome}>Back to store</button></aside><main className="account-page-main"><div className="account-page-heading"><p className="modal-category">Customer area</p><h1>My account</h1><p>Manage your details, delivery address, and sign-in security.</p></div><AccountModal user={user} inline onClose={onNavigateHome} /></main></div>;
+}
+
+export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavigateAccount, onNavigateProduct, onNavigateCategory, selectedProductId, selectedCategoryName }) {
   const products = useProducts();
   const [navOpen, setNavOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All");
@@ -119,6 +263,9 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
   const [cart, setCart] = useState([]);
   const [detailId, setDetailId] = useState(selectedProductId || null);
   const [cartNotice, setCartNotice] = useState("");
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authForCheckout, setAuthForCheckout] = useState(false);
+  const user = useUserSession();
 
   React.useEffect(() => {
     setSelectedCategoryLocal(selectedCategoryName || null);
@@ -176,14 +323,34 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
   };
   const changeQty = (id, delta) => setCart(prev => prev.map(x => x.id === id ? {...x, qty: x.qty + delta} : x).filter(x => x.qty > 0));
   const cartCount = cart.reduce((s, x) => s + x.qty, 0);
-  const checkout = async () => {
+  const completeCheckout = async (user) => {
     if (!cart.length) return;
-    const customer = window.prompt("Customer name", "Website Customer") || "Website Customer";
     const date = new Date().toISOString().slice(0,10);
     for (const item of cart) {
-      await recordSale({ id:`s-${Date.now()}-${item.id}`, date, customer, productId:item.id, productName:item.name, category:item.category, quantity:item.qty, unitPrice:Number(item.price), total:Number(item.price) * item.qty, status:"Paid" });
+      await recordSale({ id:`s-${Date.now()}-${item.id}`, date, customer:user.name, customerEmail:user.email, productId:item.id, productName:item.name, category:item.category, quantity:item.qty, unitPrice:Number(item.price), total:Number(item.price) * item.qty, status:"Paid" });
     }
-    setCart([]); setCartOpen(false); window.alert("Sale recorded. It is now included in the Sales Overview.");
+    setCart([]); setCartOpen(false); setAuthOpen(false); window.alert("Sale recorded. It is now included in the Sales Overview.");
+  };
+  const checkout = async () => {
+    if (!cart.length) return;
+    const session = getUserSession();
+    if (!session) { openCheckoutLogin(); return; }
+    await completeCheckout(session);
+  };
+  const openLogin = () => {
+    setNavOpen(false);
+    setAuthForCheckout(false);
+    setAuthOpen(true);
+  };
+  const openCheckoutLogin = () => {
+    setAuthForCheckout(true);
+    setAuthOpen(true);
+  };
+  const handleAuthSuccess = async (authenticatedUser) => {
+    setAuthOpen(false);
+    if (authForCheckout) await completeCheckout(authenticatedUser);
+    else if (onNavigateAccount) onNavigateAccount();
+    setAuthForCheckout(false);
   };
 
   const openCategory = (categoryName) => {
@@ -225,7 +392,8 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
         <div className="header-actions">
           <div className="search-box"><Search size={15} /><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div>
           <button className="cart-button" onClick={() => setCartOpen(true)} aria-label={`Cart with ${cartCount} items`}><ShoppingCart size={17} /><span className="cart-label">Cart</span>{cartCount > 0 && <b>{cartCount}</b>}</button>
-          <nav className={`site-nav ${navOpen ? "open" : ""}`}><a href="#shop" onClick={e => { e.preventDefault(); openHome(); }}>Shop</a><a href="#about" onClick={e => e.preventDefault()}>About</a><a href="#footer" onClick={e => e.preventDefault()}>Contact</a></nav>
+          <button className="login-button" onClick={user ? onNavigateAccount : openLogin}><LogIn size={15}/><span>{user?.name || "Login"}</span></button>
+          <nav className={`site-nav ${navOpen ? "open" : ""}`}><div className="mobile-nav-search"><Search size={15}/><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div><a href="#shop" onClick={e => { e.preventDefault(); openHome(); }}>Shop</a><a href="#about" onClick={e => e.preventDefault()}>About</a><a href="#footer" onClick={e => e.preventDefault()}>Contact</a></nav>
           <button className="menu-btn" aria-label="Toggle menu" onClick={() => setNavOpen(v => !v)}>{navOpen ? <X size={20} color={colors.linen50}/> : <Menu size={20} color={colors.linen50}/>}</button>
         </div>
       </div></header>
@@ -241,7 +409,8 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
         {filteredCategoryProducts.length ? <div className="p-grid">{filteredCategoryProducts.map(p => <article key={p.id} className="p-card"><button className="p-card-main" onClick={() => openProduct(p.id)}><div className="p-image"><ProductImage src={p.image} alt={p.name} /></div><div className="p-body"><p className="p-category">{p.category}</p><p className="p-name">{p.name}</p><p className="p-price">{currency(p.price)}</p></div></button><button className="add-cart" onClick={() => addToCart(p)}><Plus size={15}/> Add to cart</button></article>)}</div> : <div className="empty-state">No items found in this category.</div>}
       </div>
       {cartNotice && <div className="cart-toast">{cartNotice}</div>}
-      {cartOpen && <div className="cart-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={e => e.stopPropagation()}><div className="cart-head"><h2>Your cart</h2><button onClick={() => setCartOpen(false)}><X size={19}/></button></div>{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={34}/><p>Your cart is empty.</p><span>Add furniture from the collection to get started.</span></div> : <><div className="cart-items">{cart.map(item => <div className="cart-item" key={item.id}><img src={item.image} alt={item.name}/><div className="cart-item-info"><strong>{item.name}</strong><span>{currency(item.price)}</span><div className="qty"><button onClick={() => changeQty(item.id, -1)}><Minus size={13}/></button><b>{item.qty}</b><button onClick={() => changeQty(item.id, 1)}><Plus size={13}/></button><button className="remove" onClick={() => changeQty(item.id, -item.qty)}><Trash2 size={13}/></button></div></div></div>)}</div><div className="cart-total"><span>Total</span><strong>{currency(cart.reduce((sum, item) => sum + item.price * item.qty, 0))}</strong></div><button className="checkout-btn" onClick={checkout}>Record sale (demo)</button></>}</aside></div>}
+      {cartOpen && <div className="cart-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={e => e.stopPropagation()}><div className="cart-head"><h2>Your cart</h2><button onClick={() => setCartOpen(false)}><X size={19}/></button></div>{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={34}/><p>Your cart is empty.</p><span>Add furniture from the collection to get started.</span></div> : <><div className="cart-items">{cart.map(item => <div className="cart-item" key={item.id}><img src={item.image} alt={item.name}/><div className="cart-item-info"><strong>{item.name}</strong><span>{currency(item.price)}</span><div className="qty"><button onClick={() => changeQty(item.id, -1)}><Minus size={13}/></button><b>{item.qty}</b><button onClick={() => changeQty(item.id, 1)}><Plus size={13}/></button><button className="remove" onClick={() => changeQty(item.id, -item.qty)}><Trash2 size={13}/></button></div></div></div>)}</div><div className="cart-total"><span>Total</span><strong>{currency(cart.reduce((sum, item) => sum + item.price * item.qty, 0))}</strong></div><button className="checkout-btn" onClick={checkout}>Continue to checkout</button></>}</aside></div>}
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onSuccess={handleAuthSuccess} />}
     </div>;
   }
 
@@ -259,7 +428,8 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
         <div className="header-actions">
           <div className="search-box"><Search size={15} /><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div>
           <button className="cart-button" onClick={() => setCartOpen(true)} aria-label={`Cart with ${cartCount} items`}><ShoppingCart size={17} /><span className="cart-label">Cart</span>{cartCount > 0 && <b>{cartCount}</b>}</button>
-          <nav className={`site-nav ${navOpen ? "open" : ""}`}><a href="#shop" onClick={e => { e.preventDefault(); openHome(); }}>Shop</a><a href="#about" onClick={e => e.preventDefault()}>About</a><a href="#footer" onClick={e => e.preventDefault()}>Contact</a></nav>
+          <button className="login-button" onClick={user ? onNavigateAccount : openLogin}><LogIn size={15}/><span>{user?.name || "Login"}</span></button>
+          <nav className={`site-nav ${navOpen ? "open" : ""}`}><div className="mobile-nav-search"><Search size={15}/><input aria-label="Search furniture" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search furniture..." /></div><a href="#shop" onClick={e => { e.preventDefault(); openHome(); }}>Shop</a><a href="#about" onClick={e => e.preventDefault()}>About</a><a href="#footer" onClick={e => e.preventDefault()}>Contact</a></nav>
           <button className="menu-btn" aria-label="Toggle menu" onClick={() => setNavOpen(v => !v)}>{navOpen ? <X size={20} color={colors.linen50}/> : <Menu size={20} color={colors.linen50}/>}</button>
         </div>
       </div></header>
@@ -289,7 +459,8 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
         </div>
       </div>
       {cartNotice && <div className="cart-toast">{cartNotice}</div>}
-      {cartOpen && <div className="cart-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={e => e.stopPropagation()}><div className="cart-head"><h2>Your cart</h2><button onClick={() => setCartOpen(false)}><X size={19}/></button></div>{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={34}/><p>Your cart is empty.</p><span>Add furniture from the collection to get started.</span></div> : <><div className="cart-items">{cart.map(item => <div className="cart-item" key={item.id}><img src={item.image} alt={item.name}/><div className="cart-item-info"><strong>{item.name}</strong><span>{currency(item.price)}</span><div className="qty"><button onClick={() => changeQty(item.id, -1)}><Minus size={13}/></button><b>{item.qty}</b><button onClick={() => changeQty(item.id, 1)}><Plus size={13}/></button><button className="remove" onClick={() => changeQty(item.id, -item.qty)}><Trash2 size={13}/></button></div></div></div>)}</div><div className="cart-total"><span>Total</span><strong>{currency(cart.reduce((sum, item) => sum + item.price * item.qty, 0))}</strong></div><button className="checkout-btn" onClick={checkout}>Record sale (demo)</button></>}</aside></div>}
+      {cartOpen && <div className="cart-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={e => e.stopPropagation()}><div className="cart-head"><h2>Your cart</h2><button onClick={() => setCartOpen(false)}><X size={19}/></button></div>{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={34}/><p>Your cart is empty.</p><span>Add furniture from the collection to get started.</span></div> : <><div className="cart-items">{cart.map(item => <div className="cart-item" key={item.id}><img src={item.image} alt={item.name}/><div className="cart-item-info"><strong>{item.name}</strong><span>{currency(item.price)}</span><div className="qty"><button onClick={() => changeQty(item.id, -1)}><Minus size={13}/></button><b>{item.qty}</b><button onClick={() => changeQty(item.id, 1)}><Plus size={13}/></button><button className="remove" onClick={() => changeQty(item.id, -item.qty)}><Trash2 size={13}/></button></div></div></div>)}</div><div className="cart-total"><span>Total</span><strong>{currency(cart.reduce((sum, item) => sum + item.price * item.qty, 0))}</strong></div><button className="checkout-btn" onClick={checkout}>Continue to checkout</button></>}</aside></div>}
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onSuccess={handleAuthSuccess} />}
     </div>;
   }
 
@@ -304,7 +475,7 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
       @media(max-width:850px){.hero{grid-template-columns:1fr}.hero-media{order:-1}.p-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.category-grid{grid-template-columns:1fr}.site-nav{display:none;position:absolute;top:62px;left:0;right:0;background:${colors.walnut950};padding:12px 22px 18px;flex-direction:column;align-items:stretch}.site-nav.open{display:flex}.menu-btn{display:block}.header-actions{margin-left:auto}.search-box{width:min(240px,45vw)}}
       @media(max-width:560px){.cart-label{display:none}.search-box{width:42vw}.site-header-inner{gap:8px}.hero{padding-top:30px}.hero-media{aspect-ratio:16/11}.p-grid{grid-template-columns:1fr}.shop-section{padding-bottom:55px}}
     `}</style>
-    <Header onNavigateAdmin={onNavigateAdmin} navOpen={navOpen} setNavOpen={setNavOpen} search={search} setSearch={setSearch} cartCount={cartCount} onCart={() => setCartOpen(true)} products={products} onProductClick={openProduct}/>
+    <Header onNavigateAdmin={onNavigateAdmin} navOpen={navOpen} setNavOpen={setNavOpen} search={search} setSearch={setSearch} cartCount={cartCount} onCart={() => setCartOpen(true)} onLogin={openLogin} onAccount={onNavigateAccount} user={user} products={products} onProductClick={openProduct}/>
     <div style={{width:"100%",background:colors.linen200,padding:"0",position:"sticky",top:"62px",zIndex:29,borderBottom:`1px solid ${colors.linen200}`}}>
       <div style={{maxWidth:"1440px",margin:"auto",padding:"0 clamp(18px,5vw,70px)"}}>
         <div style={{display:"flex",overflowX:"auto",gap:"24px",paddingY:"14px",scrollBehavior:"smooth"}}>
@@ -411,6 +582,7 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
 
     <footer className="site-footer" id="footer"><p style={{margin:0}}>Grain House — handcrafted furniture. © 2026</p></footer>
     {cartNotice && <div className="cart-toast">{cartNotice}</div>}
-    {cartOpen && <div className="cart-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={e => e.stopPropagation()}><div className="cart-head"><h2>Your cart</h2><button onClick={() => setCartOpen(false)}><X size={19}/></button></div>{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={34}/><p>Your cart is empty.</p><span>Add furniture from the collection to get started.</span></div> : <><div className="cart-items">{cart.map(item => <div className="cart-item" key={item.id}><img src={item.image} alt={item.name}/><div className="cart-item-info"><strong>{item.name}</strong><span>{currency(item.price)}</span><div className="qty"><button onClick={() => changeQty(item.id, -1)}><Minus size={13}/></button><b>{item.qty}</b><button onClick={() => changeQty(item.id, 1)}><Plus size={13}/></button><button className="remove" onClick={() => changeQty(item.id, -item.qty)}><Trash2 size={13}/></button></div></div></div>)}</div><div className="cart-total"><span>Total</span><strong>{currency(cart.reduce((sum, item) => sum + item.price * item.qty, 0))}</strong></div><button className="checkout-btn" onClick={checkout}>Record sale (demo)</button></>}</aside></div>}
+    {cartOpen && <div className="cart-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={e => e.stopPropagation()}><div className="cart-head"><h2>Your cart</h2><button onClick={() => setCartOpen(false)}><X size={19}/></button></div>{cart.length === 0 ? <div className="empty-cart"><ShoppingCart size={34}/><p>Your cart is empty.</p><span>Add furniture from the collection to get started.</span></div> : <><div className="cart-items">{cart.map(item => <div className="cart-item" key={item.id}><img src={item.image} alt={item.name}/><div className="cart-item-info"><strong>{item.name}</strong><span>{currency(item.price)}</span><div className="qty"><button onClick={() => changeQty(item.id, -1)}><Minus size={13}/></button><b>{item.qty}</b><button onClick={() => changeQty(item.id, 1)}><Plus size={13}/></button><button className="remove" onClick={() => changeQty(item.id, -item.qty)}><Trash2 size={13}/></button></div></div></div>)}</div><div className="cart-total"><span>Total</span><strong>{currency(cart.reduce((sum, item) => sum + item.price * item.qty, 0))}</strong></div><button className="checkout-btn" onClick={checkout}>Continue to checkout</button></>}</aside></div>}
+    {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onSuccess={handleAuthSuccess} />}
   </div>;
 }

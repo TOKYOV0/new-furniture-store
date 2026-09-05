@@ -11,8 +11,8 @@ function getSheet_() {
 }
 
 function doPost(e) {
-  const sheet = getSheet_();
   const data = JSON.parse(e.postData.contents || '{}');
+  const sheet = getSheet_();
   const ids = sheet.getLastRow() > 1 ? sheet.getRange(2,1,sheet.getLastRow()-1,1).getValues().flat() : [];
   if (!ids.includes(data.id)) {
     sheet.appendRow([data.id || '', data.date || '', data.customer || '', data.productId || '', data.productName || '', data.category || '', Number(data.quantity || 0), Number(data.unitPrice || 0), Number(data.total || 0), data.status || 'Paid', new Date()]);
