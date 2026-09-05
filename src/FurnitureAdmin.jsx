@@ -139,9 +139,10 @@ function LoginPage({ onLogin }) {
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
+              overflow: "hidden",
             }}
           >
-            <img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
           </div>
           <div>
             <p style={{ margin: 0, fontFamily: fontVoice, fontSize: 21, fontWeight: 600, color: colors.ink900 }}>
@@ -709,9 +710,10 @@ function Sidebar({ page, setPage, onLogout, onViewSite, navOpen, setNavOpen }) {
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
+              overflow: "hidden",
             }}
           >
-            <img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
           </div>
           <div>
             <p style={{ margin: 0, fontFamily: fontVoice, fontSize: 16, fontWeight: 600, color: colors.linen50 }}>SHUKARWAAR</p>
