@@ -141,11 +141,11 @@ function LoginPage({ onLogin }) {
               flexShrink: 0,
             }}
           >
-            <Sofa size={20} color={colors.oak300} strokeWidth={1.8} />
+            <img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
           <div>
             <p style={{ margin: 0, fontFamily: fontVoice, fontSize: 21, fontWeight: 600, color: colors.ink900 }}>
-              Grain House
+              SHUKARWAAR
             </p>
             <p style={{ margin: 0, fontSize: 11, letterSpacing: 2, color: colors.ink400, textTransform: "uppercase" }}>
               Admin panel
@@ -711,10 +711,10 @@ function Sidebar({ page, setPage, onLogout, onViewSite, navOpen, setNavOpen }) {
               flexShrink: 0,
             }}
           >
-            <Sofa size={16} color={colors.oak300} strokeWidth={1.8} />
+            <img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
           <div>
-            <p style={{ margin: 0, fontFamily: fontVoice, fontSize: 16, fontWeight: 600, color: colors.linen50 }}>Grain House</p>
+            <p style={{ margin: 0, fontFamily: fontVoice, fontSize: 16, fontWeight: 600, color: colors.linen50 }}>SHUKARWAAR</p>
             <p style={{ margin: 0, fontSize: 10, letterSpacing: 1.5, color: colors.oak300, textTransform: "uppercase" }}>Admin</p>
           </div>
         </div>
