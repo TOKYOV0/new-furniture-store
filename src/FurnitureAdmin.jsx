@@ -572,6 +572,7 @@ function OrdersPage({ sales }) {
   };
   const refresh = async order => {
     if (!order.awb) { setMessage(`${order.orderId}: no AWB has been assigned yet. The order is stored in the Sales sheet.`); return; }
+    if (String(order.awb).startsWith("TEST-AWB-")) { setMessage(`${order.orderId}: test tracking is active. This is not a real Shiprocket parcel.`); return; }
     try {
       const shipment = (await trackShiprocketAwb(order.awb))?.tracking_data || {};
       const shipmentStatus = shipment.shipment_track?.[0]?.current_status || shipment.current_status || shipment.status || shipment.track_status || "Courier assignment pending";
@@ -586,7 +587,9 @@ function OrdersPage({ sales }) {
     try { await updateSaleShipment({ orderId: order.orderId, awb, courier, shipmentStatus: order.shipmentStatus || "Ready to ship" }); setMessage("Shipment details saved. Sync orders to refresh the table."); }
     catch (error) { setMessage(error.message); }
   };
-  const removeOrder = async order => {
+  /*
+    return <div><div className="page-head"><div><h1 style={{fontFamily:fontVoice,fontSize:24,fontWeight:600,color:colors.ink900,margin:"0 0 4px"}}>Orders & shipping</h1><p style={{fontSize:13.5,color:colors.ink600,margin:0}}>Customers, items, totals, addresses, AWBs and courier status.</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button className="btn-outline" disabled={syncing} onClick={syncOrders}><Package size={13}/> {syncing ? "Syncing..." : "Sync orders"}</button><button className="btn-outline" disabled={!selectedOrders.size} onClick={deleteSelectedOrders} style={{color:colors.rust600}}>Delete selected ({selectedOrders.size})</button></div></div>
+  */ const removeOrder = async order => {
     if (!window.confirm(`Delete order ${order.orderId} and all its items?`)) return;
     try { await deleteSaleOrder(order.orderId); setMessage(`Order ${order.orderId} deleted.`); }
     catch (error) { setMessage(error.message); }

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Menu, X, Sofa, ArrowRight, Search, ShoppingCart, Plus, Minus, Trash2, LogIn } from "lucide-react";
 import { useProducts, getMediaConfig } from "./productsStore";
-import { recordSale, updateSaleShipment, useSales } from "./salesStore";
+import { recordSale, updateSaleShipment, useSales, createTestShipment } from "./salesStore";
 import { createShiprocketOrder, trackShiprocketAwb } from "./shiprocketStore";
 import { getUserSession, useUserSession, loginUser, registerUser, loginWithGoogle, updateUser, logoutUser } from "./authStore";
 
@@ -223,7 +223,12 @@ function OrderHistory({ user }) {
     return [...grouped.values()];
   }, [sales, user.id, user.email]);
   const refresh = async order => {
-    if (!order.awb) { setMessage(`${order.orderId}: no AWB has been assigned yet.`); return; }
+    if (!order.awb) {
+      try { await createTestShipment(order.orderId); setMessage(`${order.orderId}: test tracking created. This is not a real Shiprocket parcel.`); }
+      catch (error) { setMessage(error.message); }
+      return;
+    }
+    if (String(order.awb).startsWith("TEST-AWB-")) { setMessage(`${order.orderId}: test tracking is active. This is not a real Shiprocket parcel.`); return; }
     try {
       const shipment = (await trackShiprocketAwb(order.awb))?.tracking_data || {};
       const currentStatus = shipment.shipment_track?.[0]?.current_status || shipment.current_status || shipment.status || shipment.track_status || "Courier assignment pending";

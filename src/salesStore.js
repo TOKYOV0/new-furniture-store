@@ -51,6 +51,19 @@ export async function updateSaleShipment(shipment) {
   return data;
 }
 
+export async function createTestShipment(orderId) {
+  const shipment = {
+    orderId,
+    awb: `TEST-AWB-${orderId}`,
+    shipmentId: `TEST-SHIPMENT-${orderId}`,
+    courier: "Test Courier",
+    trackingUrl: "",
+    shipmentStatus: "Test shipment - not dispatched",
+  };
+  await updateSaleShipment(shipment);
+  return shipment;
+}
+
 export async function deleteSaleOrder(orderId) {
   const nextSales = getSales().filter(sale => sale.orderId !== orderId && sale.id !== orderId);
   const deleted = read(DELETED_KEY, []);
