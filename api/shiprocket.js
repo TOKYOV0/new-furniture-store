@@ -60,7 +60,7 @@ export default async function handler(request, response) {
       const result = await authenticatedRequest("/orders/create/adhoc", {
         method: "POST",
         body: JSON.stringify({
-          order_id: order.orderId,
+          order_id: Number(order.orderId),
           order_date: order.orderDate,
           pickup_location: String(process.env.SHIPROCKET_PICKUP_LOCATION || "Primary").trim(),
           billing_customer_name: order.customerName,
@@ -89,7 +89,7 @@ export default async function handler(request, response) {
       return response.status(200).json({ ok: true, tracking: result });
     }
     if (data.action === "orderStatus") {
-      const result = await authenticatedRequest(`/orders/show/${encodeURIComponent(data.orderId)}`);
+      const result = await authenticatedRequest(`/orders/show/${encodeURIComponent(Number(data.orderId))}`);
       return response.status(200).json({ ok: true, order: result });
     }
     return response.status(400).json({ ok: false, error: "Unknown Shiprocket action." });

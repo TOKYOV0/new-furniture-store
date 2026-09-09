@@ -389,7 +389,7 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
       return;
     }
     const date = new Date().toISOString().slice(0,10);
-    const orderId = `order-${Date.now()}`;
+    const orderId = String(Date.now());
     const items = cart.map(item => ({ name: item.name, sku: item.id, units: item.qty, selling_price: Number(item.price) }));
     const total = cart.reduce((sum, item) => sum + Number(item.price) * item.qty, 0);
     for (const item of cart) {

@@ -44,7 +44,9 @@ export async function updateSaleShipment(shipment) {
   const webhookUrl = getSalesConfig().webhookUrl;
   if (!webhookUrl) return shipment;
   const response = await fetch(webhookUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "updateShipment", ...shipment }) });
-  const data = await response.json();
+  const raw = await response.text();
+  let data;
+  try { data = JSON.parse(raw); } catch { throw new Error(`Sales Apps Script did not return JSON (HTTP ${response.status}). Check that VITE_SALES_WEBHOOK_URL uses the deployed /exec URL.`); }
   if (!data.ok) throw new Error(data.error || "Could not save shipment details.");
   return data;
 }
