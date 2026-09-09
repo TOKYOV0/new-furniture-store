@@ -71,6 +71,10 @@ export default async function handler(request, response) {
       const result = await authenticatedRequest(`/courier/track/awb/${encodeURIComponent(data.awb)}`);
       return response.status(200).json({ ok: true, tracking: result });
     }
+    if (data.action === "orderStatus") {
+      const result = await authenticatedRequest(`/orders/show/${encodeURIComponent(data.orderId)}`);
+      return response.status(200).json({ ok: true, order: result });
+    }
     return response.status(400).json({ ok: false, error: "Unknown Shiprocket action." });
   } catch (error) {
     return response.status(500).json({ ok: false, error: error.message || "Shiprocket request failed." });

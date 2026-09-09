@@ -23,3 +23,8 @@ export async function trackShiprocketAwb(awb) {
   const data = await requestShiprocket({ action: "track", awb }, "Tracking lookup failed.");
   return data.tracking;
 }
+
+export async function getShiprocketOrder(orderId) {
+  const data = await requestShiprocket({ action: "orderStatus", orderId }, "Shiprocket order lookup failed.");
+  return data.order;
+}

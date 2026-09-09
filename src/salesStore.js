@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "grainhouse_sales_v1";
 const CONFIG_KEY = "grainhouse_sales_config_v1";
+const DELETED_KEY = "grainhouse_deleted_orders_v1";
 const EVENT_NAME = "grainhouse-sales-updated";
 
 function read(key, fallback) {
@@ -48,6 +49,20 @@ export async function updateSaleShipment(shipment) {
   return data;
 }
 
+export async function deleteSaleOrder(orderId) {
+  const nextSales = getSales().filter(sale => sale.orderId !== orderId && sale.id !== orderId);
+  const deleted = read(DELETED_KEY, []);
+  if (typeof window !== "undefined") localStorage.setItem(DELETED_KEY, JSON.stringify([...new Set([...deleted, orderId])]));
+  if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSales));
+  window?.dispatchEvent(new CustomEvent(EVENT_NAME));
+  const webhookUrl = getSalesConfig().webhookUrl;
+  if (!webhookUrl) return { ok: true };
+  const response = await fetch(webhookUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "deleteOrder", orderId }) });
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.error || "Could not delete order.");
+  return data;
+}
+
 export function clearDemoSales() {
   if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
   window?.dispatchEvent(new CustomEvent(EVENT_NAME));
@@ -68,9 +83,12 @@ export async function syncSalesFromSheet() {
   const res = await fetch(url, { method: "GET", cache: "no-store" });
   const data = await res.json();
   if (!data.ok || !Array.isArray(data.sales)) throw new Error("Invalid Google Sheets response");
-  if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(data.sales));
+  const deleted = new Set(read(DELETED_KEY, []));
+  const localSales = getSales();
+  const merged = [...data.sales, ...localSales.filter(localSale => !data.sales.some(serverSale => serverSale.id === localSale.id) && !deleted.has(localSale.orderId || localSale.id))].filter(sale => !deleted.has(sale.orderId || sale.id));
+  if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
   window?.dispatchEvent(new CustomEvent(EVENT_NAME));
-  return data.sales;
+  return merged;
 }
 
 export function useSales() {

@@ -31,6 +31,17 @@ function doPost(e) {
     });
     return json_({ok:true});
   }
+  if (data.action === 'deleteOrder') {
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    const orderColumn = headers.indexOf('Order ID');
+    const saleColumn = headers.indexOf('Sale ID');
+    for (let row = sheet.getLastRow(); row >= 2; row--) {
+      const orderId = orderColumn >= 0 ? sheet.getRange(row, orderColumn + 1).getValue() : '';
+      const saleId = saleColumn >= 0 ? sheet.getRange(row, saleColumn + 1).getValue() : '';
+      if (String(orderId || saleId) === String(data.orderId)) sheet.deleteRow(row);
+    }
+    return json_({ok:true});
+  }
   const ids = sheet.getLastRow() > 1 ? sheet.getRange(2,1,sheet.getLastRow()-1,1).getValues().flat() : [];
   if (!ids.includes(data.id)) {
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
@@ -48,25 +59,6 @@ function doGet() {
   const cell = (row, name) => { const index = headers.indexOf(name); return index >= 0 ? row[index] : ''; };
   const sales = values.slice(1).filter(r => r[0]).map(r => ({id:String(cell(r,'Sale ID')),orderId:String(cell(r,'Order ID') || cell(r,'Sale ID')),userId:String(cell(r,'User ID')),date:formatDate_(cell(r,'Date')),customer:String(cell(r,'Customer')||''),customerEmail:String(cell(r,'Email')||''),customerPhone:String(cell(r,'Phone')||''),address:String(cell(r,'Address')||''),addressDetails:parseJson_(cell(r,'Address Details')),productId:String(cell(r,'Product ID')||''),productName:String(cell(r,'Product')||''),category:String(cell(r,'Category')||''),quantity:Number(cell(r,'Quantity')||0),unitPrice:Number(cell(r,'Unit Price (INR)')||0),total:Number(cell(r,'Total (INR)')||0),status:String(cell(r,'Status')||'Paid'),awb:String(cell(r,'AWB')||''),shipmentId:String(cell(r,'Shipment ID')||''),courier:String(cell(r,'Courier')||''),trackingUrl:String(cell(r,'Tracking URL')||''),shipmentStatus:String(cell(r,'Shipment Status')||'')}));
   return json_({ok:true,sales:sales});
-}
-
-function seedDemoSales() {
-  const sheet = getSheet_();
-  if (sheet.getLastRow() > 1) return 'Sheet already contains data.';
-  const rows = [
-    ['s1','2026-06-03','Demo Customer 01','p1','Milano Leather Corner Sofa','Sofas',1,245000,245000,'Paid',new Date()],
-    ['s2','2026-06-08','Demo Customer 02','p3','Oslo Lounge Armchair','Chairs',2,52000,104000,'Paid',new Date()],
-    ['s3','2026-06-15','Demo Customer 03','p2','Nordic Oak Dining Table','Tables',1,89000,89000,'Paid',new Date()],
-    ['s4','2026-06-23','Demo Customer 04','p4','Haru Natural Wood Bed','Beds',1,158000,158000,'Paid',new Date()],
-    ['s5','2026-07-02','Demo Customer 05','p5','Bergen 4-Door Wardrobe','Cabinets',1,112000,112000,'Paid',new Date()],
-    ['s6','2026-07-11','Demo Customer 06','p3','Oslo Lounge Armchair','Chairs',3,52000,156000,'Paid',new Date()],
-    ['s7','2026-07-19','Demo Customer 07','p6','Aalto Walnut TV Console','TV units',1,67000,67000,'Paid',new Date()],
-    ['s8','2026-08-04','Demo Customer 08','p2','Nordic Oak Dining Table','Tables',2,89000,178000,'Paid',new Date()],
-    ['s9','2026-08-12','Demo Customer 09','p1','Milano Leather Corner Sofa','Sofas',1,245000,245000,'Paid',new Date()],
-    ['s10','2026-08-21','Demo Customer 10','p4','Haru Natural Wood Bed','Beds',2,158000,316000,'Paid',new Date()]
-  ];
-  sheet.getRange(2,1,rows.length,HEADERS.length).setValues(rows);
-  return 'Demo sales added.';
 }
 
 function formatDate_(value) {

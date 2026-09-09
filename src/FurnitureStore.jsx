@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Menu, X, Sofa, ArrowRight, Search, ShoppingCart, Plus, Minus, Trash2, LogIn } from "lucide-react";
 import { useProducts, getMediaConfig } from "./productsStore";
 import { recordSale, updateSaleShipment, useSales } from "./salesStore";
-import { createShiprocketOrder, trackShiprocketAwb } from "./shiprocketStore";
+import { createShiprocketOrder, trackShiprocketAwb, getShiprocketOrder } from "./shiprocketStore";
 import { getUserSession, useUserSession, loginUser, registerUser, loginWithGoogle, updateUser, logoutUser } from "./authStore";
 
 const colors = {
@@ -223,16 +223,21 @@ function OrderHistory({ user }) {
     return [...grouped.values()];
   }, [sales, user.id, user.email]);
   const refresh = async order => {
-    if (!order.awb) { setMessage("Tracking will appear after Shiprocket assigns an AWB."); return; }
     try {
-      const tracking = await trackShiprocketAwb(order.awb);
-      const data = tracking?.tracking_data || tracking;
-      const currentStatus = data.shipment_track?.[0]?.current_status || data.track_status || "Tracking updated";
-      await updateSaleShipment({ orderId: order.orderId, shipmentStatus: currentStatus });
+      const shipment = order.awb ? ((await trackShiprocketAwb(order.awb))?.tracking_data || {}) : await getShiprocketOrder(order.orderId);
+      const currentStatus = shipment.shipment_track?.[0]?.current_status || shipment.current_status || shipment.status || shipment.track_status || "Courier assignment pending";
+      await updateSaleShipment({ orderId: order.orderId, shipmentId: shipment.shipment_id, awb: shipment.awb_code || shipment.awb, courier: shipment.courier_name || shipment.courier, trackingUrl: shipment.tracking_url, shipmentStatus: currentStatus });
       setMessage(`${order.orderId}: ${currentStatus}`);
     } catch (error) { setMessage(error.message); }
   };
-  return <div className="orders-section"><div className="orders-heading"><h3>My orders</h3><span>{orders.length} order{orders.length === 1 ? "" : "s"}</span></div>{message && <p className="auth-error">{message}</p>}{orders.length ? <div className="orders-list">{orders.map(order => <article className="order-card" key={order.orderId}><div className="order-card-head"><div><strong>{order.orderId}</strong><span>{order.date}</span></div><b>{currency(order.total)}</b></div><div className="order-items">{order.items.map(item => <span key={item.id}>{item.productName} x {item.quantity}</span>)}</div><div className="order-status"><span className="status-pill">{order.shipmentStatus || order.status || "Pending"}</span>{order.awb ? <><span>AWB: {order.awb}</span><button type="button" className="tracking-button" onClick={() => refresh(order)}>Refresh tracking</button></> : <span>AWB pending</span>}{order.trackingUrl && <a href={order.trackingUrl} target="_blank" rel="noreferrer">Open tracking</a>}</div></article>)}</div> : <p className="account-note">Your completed orders and Shiprocket tracking updates will appear here.</p>}</div>;
+  React.useEffect(() => {
+    if (!orders.length) return undefined;
+    const timer = window.setInterval(() => {
+      orders.forEach(order => refresh(order));
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [orders]);
+  return <div className="orders-section"><div className="orders-heading"><h3>My orders</h3><span>{orders.length} order{orders.length === 1 ? "" : "s"}</span></div>{message && <p className="auth-error">{message}</p>}{orders.length ? <div className="orders-list">{orders.map(order => <article className="order-card" key={order.orderId}><div className="order-card-head"><div><strong>{order.orderId}</strong><span>{order.date}</span></div><b>{currency(order.total)}</b></div><div className="order-items">{order.items.map(item => <span key={item.id}>{item.productName} x {item.quantity}</span>)}</div><div className="order-status"><span className="status-pill">{order.shipmentStatus || order.status || "Pending"}</span>{order.awb ? <span>AWB: {order.awb}</span> : <span>Courier assignment pending</span>}{order.courier && <span>Courier: {order.courier}</span>}<button type="button" className="tracking-button" onClick={() => refresh(order)}>Refresh tracking</button>{order.trackingUrl && <a href={order.trackingUrl} target="_blank" rel="noreferrer">Open tracking</a>}</div></article>)}</div> : <p className="account-note">Your completed orders and Shiprocket tracking updates will appear here.</p>}</div>;
 }
 
 function AccountModal({ user, onClose, inline = false }) {
