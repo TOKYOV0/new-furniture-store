@@ -34,7 +34,8 @@ import {
   MapPin,
 } from "lucide-react";
 import { useProducts, saveProducts, normalizeImageUrl, getProductsConfig, saveProductsConfig, fetchProductsFromSheet, clearProductsLocal, getMediaConfig, saveMediaConfig } from "./productsStore";
-import { useSales, getSalesConfig, saveSalesConfig, clearDemoSales, syncSalesFromSheet } from "./salesStore";
+import { useSales, getSalesConfig, saveSalesConfig, clearDemoSales, syncSalesFromSheet, updateSaleShipment } from "./salesStore";
+import { trackShiprocketAwb } from "./shiprocketStore";
 import { fetchUsers, updateUser, deleteUser, getUsersConfig, saveUsersConfig } from "./authStore";
 
 /* ---------------------------------------------------------
@@ -534,6 +535,41 @@ function AddressPage() {
   </div>;
 }
 
+function OrdersPage({ sales }) {
+  const [query, setQuery] = useState("");
+  const [message, setMessage] = useState("");
+  const orders = useMemo(() => {
+    const grouped = new Map();
+    sales.forEach(sale => {
+      const orderId = sale.orderId || sale.id;
+      const order = grouped.get(orderId) || { ...sale, items: [] };
+      order.items.push(sale);
+      order.total = order.items.reduce((sum, item) => sum + Number(item.total || 0), 0);
+      grouped.set(orderId, order);
+    });
+    const normalizedQuery = query.trim().toLowerCase();
+    return [...grouped.values()].filter(order => !normalizedQuery || `${order.orderId} ${order.customer} ${order.customerEmail} ${order.customerPhone} ${order.address} ${order.awb} ${order.courier} ${order.shipmentStatus} ${order.items.map(item => item.productName).join(" ")}`.toLowerCase().includes(normalizedQuery));
+  }, [sales, query]);
+  const refresh = async order => {
+    if (!order.awb) { setMessage(`${order.orderId} has no AWB yet.`); return; }
+    try {
+      const result = await trackShiprocketAwb(order.awb);
+      const data = result?.tracking_data || result;
+      const shipmentStatus = data.shipment_track?.[0]?.current_status || data.track_status || "Tracking updated";
+      await updateSaleShipment({ orderId: order.orderId, shipmentStatus });
+      setMessage(`${order.orderId}: ${shipmentStatus}`);
+    } catch (error) { setMessage(error.message); }
+  };
+  const editAwb = async order => {
+    const awb = window.prompt("Shiprocket AWB", order.awb || "");
+    if (awb === null) return;
+    const courier = window.prompt("Courier name", order.courier || "");
+    try { await updateSaleShipment({ orderId: order.orderId, awb, courier, shipmentStatus: order.shipmentStatus || "Ready to ship" }); setMessage("Shipment details saved. Sync orders to refresh the table."); }
+    catch (error) { setMessage(error.message); }
+  };
+  return <div><div className="page-head"><div><h1 style={{fontFamily:fontVoice,fontSize:24,fontWeight:600,color:colors.ink900,margin:"0 0 4px"}}>Orders & shipping</h1><p style={{fontSize:13.5,color:colors.ink600,margin:0}}>Customers, items, totals, addresses, AWBs and courier status.</p></div><button className="btn-outline" onClick={() => syncSalesFromSheet().catch(error => setMessage(error.message))}><Package size={13}/> Sync orders</button></div><div className="chart-card" style={{marginBottom:18}}><input className="text-input" placeholder="Search order ID, customer, product, AWB or courier" value={query} onChange={event => setQuery(event.target.value)} /></div>{message && <p style={{fontSize:12,color:colors.sage600,margin:"0 0 14px"}}>{message}</p>}<div className="chart-card" style={{padding:0,overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}><thead><tr style={{textAlign:"left",color:colors.ink600,background:colors.linen100}}>{["Order","Customer","Items","Total","Shipment","Actions"].map(label => <th key={label} style={{padding:"12px 14px",whiteSpace:"nowrap"}}>{label}</th>)}</tr></thead><tbody>{orders.length ? orders.map(order => <tr key={order.orderId} style={{borderTop:`1px solid ${colors.linen200}`,verticalAlign:"top"}}><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}><strong>{order.orderId}</strong><br/>{order.date}</td><td style={{padding:"12px 14px",minWidth:190}}>{order.customer}<br/>{order.customerEmail || order.customerPhone || "-"}<br/>{order.address || "No address"}</td><td style={{padding:"12px 14px",minWidth:200}}>{order.items.map(item => <div key={item.id}>{item.productName} x {item.quantity}</div>)}</td><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}>{currency(order.total)}</td><td style={{padding:"12px 14px",minWidth:180}}>{order.shipmentStatus || order.status || "Pending"}<br/>{order.awb ? `AWB: ${order.awb}` : "AWB pending"}<br/>{order.courier || "Courier pending"}{order.trackingUrl && <><br/><a href={order.trackingUrl} target="_blank" rel="noreferrer">Open tracking</a></>}</td><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}><button className="btn-outline" onClick={() => editAwb(order)} style={{marginRight:6}}>Edit AWB</button><button className="btn-outline" onClick={() => refresh(order)}>Refresh</button></td></tr>) : <tr><td colSpan="6" style={{padding:24,textAlign:"center",color:colors.ink600}}>No orders match your search.</td></tr>}</tbody></table></div></div>;
+}
+
 function MediaPage({ products }) {
   const [mediaConfig, setMediaConfig] = useState(getMediaConfig());
   const [saved, setSaved] = useState(false);
@@ -691,6 +727,7 @@ function MediaPage({ products }) {
 function Sidebar({ page, setPage, onLogout, onViewSite, navOpen, setNavOpen }) {
   const items = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "orders", label: "Orders & shipping", icon: ShoppingBag },
     { id: "products", label: "Products", icon: Package },
     { id: "media", label: "Media", icon: ImagePlus },
     { id: "users", label: "Users", icon: Users },
@@ -911,6 +948,7 @@ export default function FurnitureAdminApp({ onNavigateHome }) {
           />
           <div className="main-content">
             {page === "dashboard" && <Dashboard products={products} sales={sales} />}
+            {page === "orders" && <OrdersPage sales={sales} />}
             {page === "products" && <ProductsPage products={products} />}
             {page === "media" && <MediaPage products={products} />}
             {page === "users" && <UsersPage />}

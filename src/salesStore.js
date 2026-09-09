@@ -36,6 +36,18 @@ export async function recordSale(sale) {
   return sale;
 }
 
+export async function updateSaleShipment(shipment) {
+  const nextSales = getSales().map(sale => sale.orderId === shipment.orderId ? { ...sale, ...shipment } : sale);
+  if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSales));
+  window?.dispatchEvent(new CustomEvent(EVENT_NAME));
+  const webhookUrl = getSalesConfig().webhookUrl;
+  if (!webhookUrl) return shipment;
+  const response = await fetch(webhookUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "updateShipment", ...shipment }) });
+  const data = await response.json();
+  if (!data.ok) throw new Error(data.error || "Could not save shipment details.");
+  return data;
+}
+
 export function clearDemoSales() {
   if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
   window?.dispatchEvent(new CustomEvent(EVENT_NAME));

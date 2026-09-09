@@ -63,7 +63,7 @@ function doPost(e) {
   if (data.action === 'register') {
     if ((!email && !phone) || !data.password || !data.name) return json_({ok:false, error:'Name, email or phone, and password are required.'});
     if (index >= 0) return json_({ok:false, error:'An account with this email or phone already exists.'});
-    const addresses = Array.isArray(data.addresses) ? data.addresses : (data.address ? [{ label: 'Home', value: String(data.address).trim() }] : []);
+    const addresses = normalizeAddresses_(data.addresses, data.address);
     const row = Array(USER_HEADERS.length).fill('');
     row[columns.id] = 'u-' + now.getTime();
     row[columns.name] = String(data.name).trim();
@@ -137,7 +137,7 @@ function doPost(e) {
       row[columns.phone] = nextPhone;
     }
     if (data.addresses !== undefined) {
-      const addresses = Array.isArray(data.addresses) ? data.addresses.filter(item => item && item.value).map(item => ({ label: String(item.label || 'Address'), value: String(item.value).trim() })) : [];
+      const addresses = normalizeAddresses_(data.addresses, data.address);
       row[columns.address] = addresses[0]?.value || '';
       row[columns.addresses] = JSON.stringify(addresses);
     } else if (data.address !== undefined) {
@@ -187,6 +187,20 @@ function parseAddresses_(value, fallback) {
     if (Array.isArray(addresses)) return addresses;
   } catch (error) {}
   return fallback ? [{ label: 'Home', value: String(fallback) }] : [];
+}
+
+function normalizeAddresses_(addresses, fallback) {
+  const source = Array.isArray(addresses) ? addresses : (fallback ? [{ label: 'Home', value: String(fallback).trim() }] : []);
+  return source.filter(item => item).map(item => ({
+    label: String(item.label || 'Address').trim(),
+    house: String(item.house || '').trim(),
+    street: String(item.street || '').trim(),
+    city: String(item.city || '').trim(),
+    state: String(item.state || '').trim(),
+    pincode: String(item.pincode || '').trim(),
+    country: String(item.country || 'India').trim(),
+    value: String(item.value || [item.house, item.street, item.city, item.state, item.pincode].filter(Boolean).join(', ')).trim()
+  })).filter(item => item.house || item.street || item.city || item.state || item.pincode || item.value);
 }
 
 function hashPassword_(password) {

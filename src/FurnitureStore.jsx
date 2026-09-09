@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { Menu, X, Sofa, ArrowRight, Search, ShoppingCart, Plus, Minus, Trash2, LogIn } from "lucide-react";
 import { useProducts, getMediaConfig } from "./productsStore";
-import { recordSale } from "./salesStore";
+import { recordSale, updateSaleShipment, useSales } from "./salesStore";
+import { createShiprocketOrder, trackShiprocketAwb } from "./shiprocketStore";
 import { getUserSession, useUserSession, loginUser, registerUser, loginWithGoogle, updateUser, logoutUser } from "./authStore";
 
 const colors = {
@@ -13,6 +14,25 @@ const fontBody = `"Inter", "Helvetica Neue", sans-serif`;
 const currency = (n) => Number(n || 0).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=1200&q=80";
 const userInitials = (name = "") => String(name).trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join("") || "U";
+const emptyAddress = () => ({ label: "Home", house: "", street: "", city: "", state: "", pincode: "", country: "India" });
+const addressValue = (address = {}) => address.value || [address.house, address.street, address.city, address.state, address.pincode].filter(Boolean).join(", ");
+const normalizeAddress = (address = {}) => {
+  const current = { ...emptyAddress(), ...address };
+  if (current.house && current.street && current.city && current.state && current.pincode) return { ...current, value: addressValue(current) };
+  const parts = String(current.value || "").split(",").map(part => part.trim()).filter(Boolean);
+  const pinIndex = parts.findIndex(part => /^\d{6}$/.test(part));
+  const pincode = current.pincode || (pinIndex >= 0 ? parts[pinIndex] : (String(current.value).match(/\b\d{6}\b/) || [""])[0]);
+  const remaining = parts.filter((_, index) => index !== pinIndex);
+  return {
+    ...current,
+    house: current.house || remaining[0] || "",
+    street: current.street || remaining[1] || "",
+    city: current.city || remaining[Math.max(2, remaining.length - 2)] || "",
+    state: current.state || remaining[Math.max(2, remaining.length - 1)] || "",
+    pincode,
+    value: addressValue({ ...current, house: current.house || remaining[0], street: current.street || remaining[1], city: current.city || remaining[Math.max(2, remaining.length - 2)], state: current.state || remaining[Math.max(2, remaining.length - 1)], pincode })
+  };
+};
 
 function ProductImage({ src, alt, className = "", style = {} }) {
   const [currentSrc, setCurrentSrc] = useState(src || FALLBACK_IMAGE);
@@ -188,12 +208,40 @@ function AuthModal({ onClose, onSuccess }) {
   </div></div>;
 }
 
+function OrderHistory({ user }) {
+  const sales = useSales();
+  const [message, setMessage] = useState("");
+  const orders = useMemo(() => {
+    const grouped = new Map();
+    sales.filter(sale => sale.userId === user.id || sale.customerEmail === user.email).forEach(sale => {
+      const orderId = sale.orderId || sale.id;
+      const order = grouped.get(orderId) || { ...sale, items: [] };
+      order.items.push(sale);
+      order.total = order.items.reduce((sum, item) => sum + Number(item.total || 0), 0);
+      grouped.set(orderId, order);
+    });
+    return [...grouped.values()];
+  }, [sales, user.id, user.email]);
+  const refresh = async order => {
+    if (!order.awb) { setMessage("Tracking will appear after Shiprocket assigns an AWB."); return; }
+    try {
+      const tracking = await trackShiprocketAwb(order.awb);
+      const data = tracking?.tracking_data || tracking;
+      const currentStatus = data.shipment_track?.[0]?.current_status || data.track_status || "Tracking updated";
+      await updateSaleShipment({ orderId: order.orderId, shipmentStatus: currentStatus });
+      setMessage(`${order.orderId}: ${currentStatus}`);
+    } catch (error) { setMessage(error.message); }
+  };
+  return <div className="orders-section"><div className="orders-heading"><h3>My orders</h3><span>{orders.length} order{orders.length === 1 ? "" : "s"}</span></div>{message && <p className="auth-error">{message}</p>}{orders.length ? <div className="orders-list">{orders.map(order => <article className="order-card" key={order.orderId}><div className="order-card-head"><div><strong>{order.orderId}</strong><span>{order.date}</span></div><b>{currency(order.total)}</b></div><div className="order-items">{order.items.map(item => <span key={item.id}>{item.productName} x {item.quantity}</span>)}</div><div className="order-status"><span className="status-pill">{order.shipmentStatus || order.status || "Pending"}</span>{order.awb ? <><span>AWB: {order.awb}</span><button type="button" className="tracking-button" onClick={() => refresh(order)}>Refresh tracking</button></> : <span>AWB pending</span>}{order.trackingUrl && <a href={order.trackingUrl} target="_blank" rel="noreferrer">Open tracking</a>}</div></article>)}</div> : <p className="account-note">Your completed orders and Shiprocket tracking updates will appear here.</p>}</div>;
+}
+
 function AccountModal({ user, onClose, inline = false }) {
-  const [section, setSection] = useState("details");
+  const [section, setSection] = useState("orders");
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [phone, setPhone] = useState(user?.phone || "");
-  const [addresses, setAddresses] = useState(user?.addresses?.length ? user.addresses : (user?.address ? [{ label: "Home", value: user.address }] : [{ label: "Home", value: "" }]));
+  const [addresses, setAddresses] = useState(user?.addresses?.length ? user.addresses.map(normalizeAddress) : (user?.address ? [normalizeAddress({ value: user.address })] : [emptyAddress()]));
+  const [savedAddresses, setSavedAddresses] = useState(user?.addresses?.length ? user.addresses.map(normalizeAddress) : (user?.address ? [normalizeAddress({ value: user.address })] : []));
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -208,13 +256,15 @@ function AccountModal({ user, onClose, inline = false }) {
       const profile = section === "details"
         ? { name, email, phone }
         : section === "address"
-          ? { addresses: addresses.filter(item => item.value.trim()) }
+          ? { addresses: addresses.map(normalizeAddress).filter(item => item.house || item.street || item.city || item.state || item.pincode) }
           : { password };
       const next = await updateUser({ id: user.id, ...profile });
       setName(next.name || "");
       setEmail(next.email || "");
       setPhone(next.phone || "");
-      setAddresses(next.addresses?.length ? next.addresses : (next.address ? [{ label: "Home", value: next.address }] : [{ label: "Home", value: "" }]));
+      const nextAddresses = next.addresses?.length ? next.addresses.map(normalizeAddress) : (next.address ? [normalizeAddress({ value: next.address })] : []);
+      setAddresses(nextAddresses.length ? nextAddresses : [emptyAddress()]);
+      setSavedAddresses(nextAddresses);
       setPassword("");
       setMessage("Changes saved.");
     } catch (requestError) {
@@ -233,14 +283,15 @@ function AccountModal({ user, onClose, inline = false }) {
     <button className="modal-close" onClick={onClose} aria-label="Close"><X size={18}/></button>
     <p className="modal-category">My account</p>
     <h2 className="account-title">{user.name}</h2>
-    <div className="account-tabs"><button type="button" className={section === "details" ? "active" : ""} onClick={() => { setSection("details"); setMessage(""); setError(""); }}>Details</button><button type="button" className={section === "address" ? "active" : ""} onClick={() => { setSection("address"); setMessage(""); setError(""); }}>Address</button><button type="button" className={section === "security" ? "active" : ""} onClick={() => { setSection("security"); setMessage(""); setError(""); }}>Security</button></div>
+    <div className="account-tabs"><button type="button" className={section === "orders" ? "active" : ""} onClick={() => setSection("orders")}>Orders</button><button type="button" className={section === "details" ? "active" : ""} onClick={() => { setSection("details"); setMessage(""); setError(""); }}>Details</button><button type="button" className={section === "address" ? "active" : ""} onClick={() => { setSection("address"); setMessage(""); setError(""); }}>Address</button><button type="button" className={section === "security" ? "active" : ""} onClick={() => { setSection("security"); setMessage(""); setError(""); }}>Security</button></div>
     <form onSubmit={save}>
+      {section === "orders" && <OrderHistory user={user} />}
       {section === "details" && <><label className="auth-label">Full name<input className="auth-input" value={name} onChange={event => setName(event.target.value)} required /></label><label className="auth-label">Email address<input className="auth-input" type="email" value={email} onChange={event => setEmail(event.target.value)} /></label><label className="auth-label">Phone number<input className="auth-input" type="tel" value={phone} onChange={event => setPhone(event.target.value)} /></label></>}
-      {section === "address" && <div className="address-editor"><p className="account-note">Save more than one delivery address for faster checkout.</p>{addresses.map((item, index) => <div className="address-row" key={index}><label className="auth-label"><span>Address name</span><input className="auth-input" value={item.label} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, label: event.target.value} : entry))} placeholder="Home, Work..." /></label><label className="auth-label"><span>Full address</span><textarea className="auth-input account-textarea" value={item.value} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, value: event.target.value} : entry))} rows="3" placeholder="House, street, city, state and postal code" /></label>{addresses.length > 1 && <button type="button" className="address-remove" onClick={() => setAddresses(current => current.filter((_, entryIndex) => entryIndex !== index))}>Remove</button>}</div>)}<button type="button" className="address-add" onClick={() => setAddresses(current => [...current, { label: `Address ${current.length + 1}`, value: "" }])}>+ Add another address</button></div>}
+      {section === "address" && <div className="address-editor"><p className="account-note">Shiprocket requires these delivery fields separately. Save more than one address for faster checkout.</p>{addresses.map((item, index) => <div className="address-row" key={index}><label className="auth-label"><span>Address name</span><input className="auth-input" value={item.label} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, label: event.target.value} : entry))} placeholder="Home, Work..." /></label><div className="address-field-grid"><label className="auth-label"><span>House / apartment</span><input className="auth-input" value={item.house} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, house: event.target.value} : entry))} required /></label><label className="auth-label"><span>Street / area</span><input className="auth-input" value={item.street} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, street: event.target.value} : entry))} required /></label><label className="auth-label"><span>City</span><input className="auth-input" value={item.city} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, city: event.target.value} : entry))} required /></label><label className="auth-label"><span>State</span><input className="auth-input" value={item.state} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, state: event.target.value} : entry))} required /></label><label className="auth-label"><span>PIN code</span><input className="auth-input" inputMode="numeric" pattern="[0-9]{6}" maxLength="6" value={item.pincode} onChange={event => setAddresses(current => current.map((entry, entryIndex) => entryIndex === index ? {...entry, pincode: event.target.value.replace(/\D/g, "").slice(0, 6) } : entry))} required /></label></div>{addresses.length > 1 && <button type="button" className="address-remove" onClick={() => setAddresses(current => current.filter((_, entryIndex) => entryIndex !== index))}>Remove</button>}</div>)}<button type="button" className="address-add" onClick={() => setAddresses(current => [...current, {...emptyAddress(), label: `Address ${current.length + 1}`}])}>+ Add another address</button>{savedAddresses.length > 0 && <div className="saved-addresses"><h3>Saved addresses</h3>{savedAddresses.map((item, index) => <div className="saved-address-card" key={`${item.label}-${index}`}><strong>{item.label || `Address ${index + 1}`}</strong><span>{item.house}, {item.street}</span><span>{item.city}, {item.state} - {item.pincode}</span></div>)}</div>}</div>}
       {section === "security" && <><p className="account-note">Choose a new password for email or phone login.</p><label className="auth-label">New password<input className="auth-input" type="password" minLength={6} value={password} onChange={event => setPassword(event.target.value)} required /></label></>}
       {error && <p className="auth-error">{error}</p>}
       {message && <p className="auth-success">{message}</p>}
-      <button className="hero-cta auth-submit" type="submit" disabled={busy}>{busy ? "Saving..." : "Save changes"}</button>
+      {section !== "orders" && <button className="hero-cta auth-submit" type="submit" disabled={busy}>{busy ? "Saving..." : "Save changes"}</button>}
     </form>
     <button className="account-signout" onClick={signOut}>Sign out</button>
   </div></div>;
@@ -326,11 +377,27 @@ export default function FurnitureStore({ onNavigateAdmin, onNavigateHome, onNavi
   const cartCount = cart.reduce((s, x) => s + x.qty, 0);
   const completeCheckout = async (user) => {
     if (!cart.length) return;
-    const date = new Date().toISOString().slice(0,10);
-    for (const item of cart) {
-      await recordSale({ id:`s-${Date.now()}-${item.id}`, date, customer:user.name, customerEmail:user.email, productId:item.id, productName:item.name, category:item.category, quantity:item.qty, unitPrice:Number(item.price), total:Number(item.price) * item.qty, status:"Paid" });
+    const deliveryAddress = normalizeAddress(user.addresses?.[0] || (user.address ? { value: user.address } : {}));
+    if (!deliveryAddress.house || !deliveryAddress.street || !deliveryAddress.city || !deliveryAddress.state || !/^\d{6}$/.test(deliveryAddress.pincode)) {
+      window.alert("Please save a complete delivery address with house, street, city, state, and 6-digit PIN code in My account before checkout.");
+      if (onNavigateAccount) onNavigateAccount();
+      return;
     }
-    setCart([]); setCartOpen(false); setAuthOpen(false); window.alert("Sale recorded. It is now included in the Sales Overview.");
+    const date = new Date().toISOString().slice(0,10);
+    const orderId = `order-${Date.now()}`;
+    const items = cart.map(item => ({ name: item.name, sku: item.id, units: item.qty, selling_price: Number(item.price) }));
+    const total = cart.reduce((sum, item) => sum + Number(item.price) * item.qty, 0);
+    for (const item of cart) {
+      await recordSale({ id:`s-${Date.now()}-${item.id}`, orderId, userId:user.id, date, customer:user.name, customerEmail:user.email, customerPhone:user.phone, address:addressValue(deliveryAddress), addressDetails:deliveryAddress, productId:item.id, productName:item.name, category:item.category, quantity:item.qty, unitPrice:Number(item.price), total:Number(item.price) * item.qty, status:"Paid", shipmentStatus:"Order placed" });
+    }
+    try {
+      const shipment = await createShiprocketOrder({ orderId, orderDate:date, customerName:user.name, email:user.email, phone:user.phone, address:deliveryAddress, items, subTotal:total });
+      await updateSaleShipment({ orderId, shipmentId: shipment.shipment_id || "", awb: shipment.awb_code || shipment.awb || "", courier: shipment.courier_name || "", trackingUrl: shipment.tracking_url || "", shipmentStatus: shipment.status || "Shipment created" });
+      window.alert(`Order ${orderId} placed with Shiprocket. Shipment ID: ${shipment.shipment_id || "pending"}.`);
+    } catch (error) {
+      window.alert(`Order ${orderId} was recorded, but shipping is pending: ${error.message}`);
+    }
+    setCart([]); setCartOpen(false); setAuthOpen(false);
   };
   const checkout = async () => {
     if (!cart.length) return;
