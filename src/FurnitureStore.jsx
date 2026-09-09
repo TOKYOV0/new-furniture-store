@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Menu, X, Sofa, ArrowRight, Search, ShoppingCart, Plus, Minus, Trash2, LogIn } from "lucide-react";
 import { useProducts, getMediaConfig } from "./productsStore";
 import { recordSale, updateSaleShipment, useSales } from "./salesStore";
-import { createShiprocketOrder, trackShiprocketAwb, getShiprocketOrder } from "./shiprocketStore";
+import { createShiprocketOrder, trackShiprocketAwb } from "./shiprocketStore";
 import { getUserSession, useUserSession, loginUser, registerUser, loginWithGoogle, updateUser, logoutUser } from "./authStore";
 
 const colors = {
@@ -223,8 +223,9 @@ function OrderHistory({ user }) {
     return [...grouped.values()];
   }, [sales, user.id, user.email]);
   const refresh = async order => {
+    if (!order.awb) { setMessage(`${order.orderId}: no AWB has been assigned yet.`); return; }
     try {
-      const shipment = order.awb ? ((await trackShiprocketAwb(order.awb))?.tracking_data || {}) : await getShiprocketOrder(order.orderId);
+      const shipment = (await trackShiprocketAwb(order.awb))?.tracking_data || {};
       const currentStatus = shipment.shipment_track?.[0]?.current_status || shipment.current_status || shipment.status || shipment.track_status || "Courier assignment pending";
       await updateSaleShipment({ orderId: order.orderId, shipmentId: shipment.shipment_id, awb: shipment.awb_code || shipment.awb, courier: shipment.courier_name || shipment.courier, trackingUrl: shipment.tracking_url, shipmentStatus: currentStatus });
       setMessage(`${order.orderId}: ${currentStatus}`);

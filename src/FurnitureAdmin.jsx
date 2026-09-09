@@ -35,7 +35,7 @@ import {
 } from "lucide-react";
 import { useProducts, saveProducts, normalizeImageUrl, getProductsConfig, saveProductsConfig, fetchProductsFromSheet, clearProductsLocal, getMediaConfig, saveMediaConfig } from "./productsStore";
 import { useSales, getSalesConfig, saveSalesConfig, clearDemoSales, syncSalesFromSheet, updateSaleShipment, deleteSaleOrder } from "./salesStore";
-import { trackShiprocketAwb, getShiprocketOrder } from "./shiprocketStore";
+import { trackShiprocketAwb } from "./shiprocketStore";
 import { fetchUsers, updateUser, deleteUser, getUsersConfig, saveUsersConfig } from "./authStore";
 
 /* ---------------------------------------------------------
@@ -538,6 +538,8 @@ function AddressPage() {
 function OrdersPage({ sales }) {
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState(new Set());
+  const [syncing, setSyncing] = useState(false);
   const orders = useMemo(() => {
     const grouped = new Map();
     sales.forEach(sale => {
@@ -550,9 +552,28 @@ function OrdersPage({ sales }) {
     const normalizedQuery = query.trim().toLowerCase();
     return [...grouped.values()].filter(order => !normalizedQuery || `${order.orderId} ${order.customer} ${order.customerEmail} ${order.customerPhone} ${order.address} ${order.awb} ${order.courier} ${order.shipmentStatus} ${order.items.map(item => item.productName).join(" ")}`.toLowerCase().includes(normalizedQuery));
   }, [sales, query]);
+  const syncOrders = async () => {
+    setSyncing(true);
+    try { const synced = await syncSalesFromSheet(); setMessage(`Synced ${synced.length} order items from Google Sheets.`); setSyncing(false); }
+    catch (error) { setMessage(error.message); }
+    finally { setSyncing(false); }
+  };
+  const toggleOrder = orderId => setSelectedOrders(current => {
+    const next = new Set(current);
+    if (next.has(orderId)) next.delete(orderId); else next.add(orderId);
+    return next;
+  });
+  const toggleAllOrders = () => setSelectedOrders(current => current.size === orders.length ? new Set() : new Set(orders.map(order => order.orderId)));
+  const deleteSelectedOrders = async () => {
+    const orderIds = [...selectedOrders];
+    if (!orderIds.length || !window.confirm(`Delete ${orderIds.length} selected orders permanently?`)) { setMessage("No orders selected for deletion."); return; }
+    try { for (const orderId of orderIds) await deleteSaleOrder(orderId); setSelectedOrders(new Set()); setMessage(`${orderIds.length} orders deleted.`); }
+    catch (error) { setMessage(error.message); }
+  };
   const refresh = async order => {
+    if (!order.awb) { setMessage(`${order.orderId}: no AWB has been assigned yet. The order is stored in the Sales sheet.`); return; }
     try {
-      const shipment = order.awb ? ((await trackShiprocketAwb(order.awb))?.tracking_data || {}) : await getShiprocketOrder(order.orderId);
+      const shipment = (await trackShiprocketAwb(order.awb))?.tracking_data || {};
       const shipmentStatus = shipment.shipment_track?.[0]?.current_status || shipment.current_status || shipment.status || shipment.track_status || "Courier assignment pending";
       await updateSaleShipment({ orderId: order.orderId, shipmentId: shipment.shipment_id, awb: shipment.awb_code || shipment.awb, courier: shipment.courier_name || shipment.courier, trackingUrl: shipment.tracking_url, shipmentStatus });
       setMessage(`${order.orderId}: ${shipmentStatus}`);
@@ -570,7 +591,7 @@ function OrdersPage({ sales }) {
     try { await deleteSaleOrder(order.orderId); setMessage(`Order ${order.orderId} deleted.`); }
     catch (error) { setMessage(error.message); }
   };
-  return <div><div className="page-head"><div><h1 style={{fontFamily:fontVoice,fontSize:24,fontWeight:600,color:colors.ink900,margin:"0 0 4px"}}>Orders & shipping</h1><p style={{fontSize:13.5,color:colors.ink600,margin:0}}>Customers, items, totals, addresses, AWBs and courier status.</p></div><button className="btn-outline" onClick={() => syncSalesFromSheet().catch(error => setMessage(error.message))}><Package size={13}/> Sync orders</button></div><div className="chart-card" style={{marginBottom:18}}><input className="text-input" placeholder="Search order ID, customer, product, AWB or courier" value={query} onChange={event => setQuery(event.target.value)} /></div>{message && <p style={{fontSize:12,color:colors.sage600,margin:"0 0 14px"}}>{message}</p>}<div className="chart-card" style={{padding:0,overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}><thead><tr style={{textAlign:"left",color:colors.ink600,background:colors.linen100}}>{["Order","Customer","Items","Total","Shipment","Actions"].map(label => <th key={label} style={{padding:"12px 14px",whiteSpace:"nowrap"}}>{label}</th>)}</tr></thead><tbody>{orders.length ? orders.map(order => <tr key={order.orderId} style={{borderTop:`1px solid ${colors.linen200}`,verticalAlign:"top"}}><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}><strong>{order.orderId}</strong><br/>{order.date}</td><td style={{padding:"12px 14px",minWidth:190}}>{order.customer}<br/>{order.customerEmail || order.customerPhone || "-"}<br/>{order.address || "No address"}</td><td style={{padding:"12px 14px",minWidth:200}}>{order.items.map(item => <div key={item.id}>{item.productName} x {item.quantity}</div>)}</td><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}>{currency(order.total)}</td><td style={{padding:"12px 14px",minWidth:180}}>{order.shipmentStatus || order.status || "Pending"}<br/>{order.awb ? `AWB: ${order.awb}` : "Courier assignment pending"}<br/>{order.courier || "Courier assignment pending"}{order.trackingUrl && <><br/><a href={order.trackingUrl} target="_blank" rel="noreferrer">Open tracking</a></>}</td><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}><button className="btn-outline" onClick={() => editAwb(order)} style={{marginRight:6}}>Edit AWB</button><button className="btn-outline" onClick={() => refresh(order)} style={{marginRight:6}}>Refresh</button><button className="btn-outline" onClick={() => removeOrder(order)} style={{color:colors.rust600}}>Delete</button></td></tr>) : <tr><td colSpan="6" style={{padding:24,textAlign:"center",color:colors.ink600}}>No orders match your search.</td></tr>}</tbody></table></div></div>;
+  return <div><div className="page-head"><div><h1 style={{fontFamily:fontVoice,fontSize:24,fontWeight:600,color:colors.ink900,margin:"0 0 4px"}}>Orders & shipping</h1><p style={{fontSize:13.5,color:colors.ink600,margin:0}}>Customers, items, totals, addresses, AWBs and courier status.</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button className="btn-outline" disabled={syncing} onClick={syncOrders}><Package size={13}/> {syncing ? "Syncing..." : "Sync orders"}</button><button className="btn-outline" disabled={!selectedOrders.size} onClick={deleteSelectedOrders} style={{color:colors.rust600}}>Delete selected ({selectedOrders.size})</button></div></div><div className="chart-card" style={{marginBottom:18}}><div style={{display:"flex",gap:8,alignItems:"center"}}><input className="text-input" placeholder="Search order ID, customer, product, AWB or courier" value={query} onChange={event => setQuery(event.target.value)} /><button className="btn-outline" onClick={toggleAllOrders}>{selectedOrders.size === orders.length && orders.length ? "Clear selection" : "Select all"}</button></div></div>{message && <p style={{fontSize:12,color:colors.sage600,margin:"0 0 14px"}}>{message}</p>}<div className="chart-card" style={{padding:0,overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}><thead><tr style={{textAlign:"left",color:colors.ink600,background:colors.linen100}}>{["Order","Customer","Items","Total","Shipment","Actions"].map(label => <th key={label} style={{padding:"12px 14px",whiteSpace:"nowrap"}}>{label}</th>)}</tr></thead><tbody>{orders.length ? orders.map(order => <tr key={order.orderId} style={{borderTop:`1px solid ${colors.linen200}`,verticalAlign:"top"}}><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}><input type="checkbox" checked={selectedOrders.has(order.orderId)} onChange={() => toggleOrder(order.orderId)} aria-label={`Select ${order.orderId}`} /> <strong>{order.orderId}</strong><br/>{order.date}</td><td style={{padding:"12px 14px",minWidth:190}}>{order.customer}<br/>{order.customerEmail || order.customerPhone || "-"}<br/>{order.address || "No address"}</td><td style={{padding:"12px 14px",minWidth:200}}>{order.items.map(item => <div key={item.id}>{item.productName} x {item.quantity}</div>)}</td><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}>{currency(order.total)}</td><td style={{padding:"12px 14px",minWidth:180}}>{order.shipmentStatus || order.status || "Pending"}<br/>{order.awb ? `AWB: ${order.awb}` : "Courier assignment pending"}<br/>{order.courier || "Courier assignment pending"}{order.trackingUrl && <><br/><a href={order.trackingUrl} target="_blank" rel="noreferrer">Open tracking</a></>}</td><td style={{padding:"12px 14px",whiteSpace:"nowrap"}}><button className="btn-outline" onClick={() => editAwb(order)} style={{marginRight:6}}>Edit AWB</button><button className="btn-outline" onClick={() => refresh(order)} style={{marginRight:6}}>Refresh</button><button className="btn-outline" onClick={() => removeOrder(order)} style={{color:colors.rust600}}>Delete</button></td></tr>) : <tr><td colSpan="6" style={{padding:24,textAlign:"center",color:colors.ink600}}>No orders match your search.</td></tr>}</tbody></table></div></div>;
 }
 
 function MediaPage({ products }) {
