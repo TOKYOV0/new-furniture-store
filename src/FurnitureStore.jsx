@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Menu, X, Sofa, ArrowRight, Search, ShoppingCart, Plus, Minus, Trash2, LogIn } from "lucide-react";
+import { Menu, X, Sofa, ArrowRight, Search, ShoppingCart, Plus, Minus, Trash2, LogIn, MapPin, PackageCheck, RefreshCw, ExternalLink } from "lucide-react";
 import { useProducts, getMediaConfig } from "./productsStore";
 import { recordSale, updateSaleShipment, useSales, createTestShipment } from "./salesStore";
 import { createShiprocketOrder, trackShiprocketAwb } from "./shiprocketStore";
@@ -236,14 +236,56 @@ function OrderHistory({ user }) {
       setMessage(`${order.orderId}: ${currentStatus}`);
     } catch (error) { setMessage(error.message); }
   };
-  React.useEffect(() => {
-    if (!orders.length) return undefined;
-    const timer = window.setInterval(() => {
-      orders.forEach(order => refresh(order));
-    }, 30000);
-    return () => window.clearInterval(timer);
-  }, [orders]);
-  return <div className="orders-section"><div className="orders-heading"><h3>My orders</h3><span>{orders.length} order{orders.length === 1 ? "" : "s"}</span></div>{message && <p className="auth-error">{message}</p>}{orders.length ? <div className="orders-list">{orders.map(order => <article className="order-card" key={order.orderId}><div className="order-card-head"><div><strong>{order.orderId}</strong><span>{order.date}</span></div><b>{currency(order.total)}</b></div><div className="order-items">{order.items.map(item => <span key={item.id}>{item.productName} x {item.quantity}</span>)}</div><div className="order-status"><span className="status-pill">{order.shipmentStatus || order.status || "Pending"}</span>{order.awb ? <span>AWB: {order.awb}</span> : <span>Courier assignment pending</span>}{order.courier && <span>Courier: {order.courier}</span>}<button type="button" className="tracking-button" onClick={() => refresh(order)}>Refresh tracking</button>{order.trackingUrl && <a href={order.trackingUrl} target="_blank" rel="noreferrer">Open tracking</a>}</div></article>)}</div> : <p className="account-note">Your completed orders and Shiprocket tracking updates will appear here.</p>}</div>;
+  const openTracking = order => window.open(`/tracking/${encodeURIComponent(order.orderId)}`, "_blank", "noopener,noreferrer");
+  return <div className="orders-section"><div className="orders-heading"><h3>My orders</h3><span>{orders.length} order{orders.length === 1 ? "" : "s"}</span></div>{message && <p className="auth-error">{message}</p>}{orders.length ? <div className="orders-list">{orders.map(order => <article className="order-card order-card-clickable" key={order.orderId} onClick={() => openTracking(order)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openTracking(order); } }} role="link" tabIndex="0"><div className="order-card-head"><div><strong>{order.orderId}</strong><span>{order.date}</span></div><b>{currency(order.total)}</b></div><div className="order-items">{order.items.map(item => <span key={item.id}>{item.productName} x {item.quantity}</span>)}</div><div className="order-status"><span className="status-pill">{order.shipmentStatus || order.status || "Pending"}</span>{order.awb ? <span>AWB: {order.awb}</span> : <span>Courier assignment pending</span>}{order.courier && <span>Courier: {order.courier}</span>}<button type="button" className="tracking-button" onClick={event => { event.stopPropagation(); refresh(order); }}>Refresh tracking</button>{order.trackingUrl && <a href={order.trackingUrl} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()}>Open tracking</a>}<span className="track-order-hint">Track parcel <ExternalLink size={12}/></span></div></article>)}</div> : <p className="account-note">Your completed orders and Shiprocket tracking updates will appear here.</p>}</div>;
+}
+
+function trackingDetails(order) {
+  const data = order?.tracking_data || order || {};
+  const track = data.shipment_track?.[0] || {};
+  const currentStatus = track.current_status || data.current_status || data.status || data.track_status || "Courier assignment pending";
+  const activities = Array.isArray(data.shipment_track_activities) ? data.shipment_track_activities : [];
+  const timeline = activities.map(activity => ({
+    status: activity.activity || activity.status || activity["sr-status"] || "Shipment update",
+    date: activity.date || activity.activity_date || activity.datetime || "",
+    location: activity.location || activity.location_name || "",
+  }));
+  if (!timeline.length && currentStatus) timeline.push({ status: currentStatus, date: "", location: "" });
+  return { currentStatus, courier: track.courier_name || data.courier_name || data.courier || "Courier assignment pending", awb: track.awb_code || data.awb_code || data.awb || "", eta: track.etd || data.etd || "", trackingUrl: data.track_url || data.tracking_url || "", timeline };
+}
+
+export function TrackingPage({ orderId, onNavigateHome }) {
+  const sales = useSales();
+  const order = useMemo(() => {
+    const items = sales.filter(sale => String(sale.orderId || sale.id) === String(orderId));
+    if (!items.length) return null;
+    return { ...items[0], items, total: items.reduce((sum, item) => sum + Number(item.total || 0), 0) };
+  }, [sales, orderId]);
+  const [tracking, setTracking] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const refreshTracking = async () => {
+    if (!order) return;
+    setLoading(true);
+    setError("");
+    try {
+      if (!order.awb || String(order.awb).startsWith("TEST-AWB-")) {
+        setTracking({ currentStatus: order.shipmentStatus || (order.awb ? "Test shipment - not dispatched" : "Courier assignment pending"), courier: order.courier || "Courier assignment pending", awb: order.awb || "", eta: "", trackingUrl: order.trackingUrl || "", timeline: [{ status: order.shipmentStatus || (order.awb ? "Test shipment - not dispatched" : "Order received"), date: order.date || "", location: "" }] });
+        return;
+      }
+      const response = await trackShiprocketAwb(order.awb);
+      const details = trackingDetails(response?.tracking_data || {});
+      setTracking(details);
+      await updateSaleShipment({ orderId: order.orderId, shipmentId: response?.tracking_data?.shipment_id || order.shipmentId, awb: details.awb || order.awb, courier: details.courier || order.courier, trackingUrl: details.trackingUrl || order.trackingUrl, shipmentStatus: details.currentStatus });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  React.useEffect(() => { refreshTracking(); }, [order?.orderId, order?.awb]);
+  const details = tracking || trackingDetails(order || {});
+  return <div className="tracking-page"><header className="tracking-header"><button type="button" className="tracking-back" onClick={onNavigateHome}>Back to store</button><div className="tracking-brand"><div className="brand-mark"><img src="/logo/shukrwaar logo-4.svg" alt="Shukarwaar logo" /></div><span>SHUKARWAAR</span></div></header>{!order ? <main className="tracking-empty"><PackageCheck size={42}/><h1>Order not found</h1><p>This order is not available in this browser.</p></main> : <main className="tracking-content"><div className="tracking-title-row"><div><p className="modal-category">Delivery tracking</p><h1>Order {order.orderId}</h1><p>{order.items.map(item => `${item.productName} x ${item.quantity}`).join(" · ")}</p></div><button type="button" className="tracking-refresh" onClick={refreshTracking} disabled={loading}><RefreshCw size={15} className={loading ? "spin" : ""}/>{loading ? "Updating..." : "Refresh status"}</button></div>{error && <p className="auth-error tracking-message">{error}</p>}<section className="tracking-summary"><div><span>Current status</span><strong>{details.currentStatus}</strong></div><div><span>Courier</span><strong>{details.courier}</strong></div><div><span>AWB</span><strong>{details.awb || "Not assigned yet"}</strong></div>{details.eta && <div><span>Expected delivery</span><strong>{details.eta}</strong></div>}</section><section className="tracking-panel"><div className="tracking-panel-heading"><div><MapPin size={18}/><div><h2>Shipment journey</h2><p>Latest updates from the courier</p></div></div>{details.trackingUrl && <a href={details.trackingUrl} target="_blank" rel="noreferrer">Courier page <ExternalLink size={13}/></a>}</div><div className="tracking-timeline">{details.timeline.map((event, index) => <div className={`tracking-event ${index === 0 ? "current" : ""}`} key={`${event.status}-${event.date}-${index}`}><span className="tracking-dot">{index === 0 ? <PackageCheck size={14}/> : <MapPin size={14}/>}</span><div><strong>{event.status}</strong>{event.date && <time>{event.date}</time>}{event.location && <span>{event.location}</span>}</div></div>)}</div></section></main>}</div>;
 }
 
 function AccountModal({ user, onClose, inline = false }) {

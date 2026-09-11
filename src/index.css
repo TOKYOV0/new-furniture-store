@@ -63,19 +63,59 @@ button { cursor: pointer; }
 .account-page-card > .modal-close { display: none; }
 .account-empty { display: grid; place-items: center; align-content: center; gap: 18px; width: 100%; min-height: 100vh; text-align: center; }
 .account-empty h1 { font-family: "Fraunces", Georgia, serif; font-size: 30px; }
-.orders-section { min-height: 190px; overflow: hidden; }
+.orders-section { min-height: 190px; }
 .orders-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .orders-heading h3 { margin: 0; font-family: "Fraunces", Georgia, serif; font-size: 22px; }
 .orders-heading span, .order-card-head span, .order-items, .order-status { color: #6E5D48; font-size: 11.5px; }
 .orders-list { display: grid; gap: 10px; }
 .order-card { padding: 14px; border: 1px solid #E9DAC0; border-radius: 5px; background: #F3E9D7; }
+.order-card-clickable { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+.order-card-clickable:hover, .order-card-clickable:focus-visible { border-color: #C2884E; box-shadow: 0 8px 18px rgba(34,22,9,.08); transform: translateY(-1px); outline: 0; }
 .order-card-head, .order-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .order-card-head div { display: grid; gap: 3px; }
 .order-items { display: grid; gap: 3px; margin: 10px 0; }
 .order-status { justify-content: flex-start; padding-top: 10px; border-top: 1px solid #E9DAC0; }
 .status-pill { padding: 4px 8px; border-radius: 99px; background: #E5EAD9; color: #69784F; font-weight: 600; }
 .tracking-button, .order-status a { padding: 0; border: 0; background: transparent; color: #A66B36; font-size: 11.5px; text-decoration: underline; }
+.track-order-hint { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: #A66B36; font-size: 11.5px; font-weight: 600; }
+.tracking-page { min-height: 100vh; background: #F3E9D7; color: #241B12; }
+.tracking-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px clamp(18px, 5vw, 72px); background: #221609; color: #FBF6EE; }
+.tracking-brand { display: flex; align-items: center; gap: 10px; font-family: "Fraunces", Georgia, serif; font-size: 18px; }
+.tracking-brand .brand-mark { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; overflow: hidden; border-radius: 50%; background: #3E2814; }
+.tracking-brand .brand-mark img { width: 100%; height: 100%; object-fit: cover; }
+.tracking-back { order: 2; padding: 8px 12px; border: 1px solid #54371C; border-radius: 4px; background: transparent; color: #DDB07E; font-size: 12px; }
+.tracking-content { width: min(900px, calc(100% - 36px)); margin: 0 auto; padding: clamp(30px, 6vw, 72px) 0; }
+.tracking-title-row { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+.tracking-title-row h1 { margin: 0 0 7px; font-family: "Fraunces", Georgia, serif; font-size: clamp(30px, 5vw, 48px); }
+.tracking-title-row p:last-child { margin: 0; color: #6E5D48; font-size: 13px; }
+.tracking-refresh { display: inline-flex; align-items: center; gap: 7px; padding: 10px 13px; border: 1px solid #D8C8B1; border-radius: 4px; background: #FBF6EE; color: #A66B36; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tracking-refresh:disabled { opacity: .65; cursor: wait; }
+.spin { animation: tracking-spin .9s linear infinite; }
+@keyframes tracking-spin { to { transform: rotate(360deg); } }
+.tracking-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-bottom: 18px; border: 1px solid #E9DAC0; background: #E9DAC0; }
+.tracking-summary div { display: grid; gap: 7px; min-width: 0; padding: 16px; background: #FBF6EE; }
+.tracking-summary span { color: #6E5D48; font-size: 11px; }
+.tracking-summary strong { overflow-wrap: anywhere; color: #241B12; font-size: 13px; }
+.tracking-panel { padding: 22px; border: 1px solid #E9DAC0; background: #FBF6EE; }
+.tracking-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; border-bottom: 1px solid #E9DAC0; }
+.tracking-panel-heading > div { display: flex; align-items: center; gap: 10px; }
+.tracking-panel-heading h2 { margin: 0 0 3px; font-family: "Fraunces", Georgia, serif; font-size: 22px; }
+.tracking-panel-heading p { margin: 0; color: #6E5D48; font-size: 12px; }
+.tracking-panel-heading a { display: inline-flex; align-items: center; gap: 5px; color: #A66B36; font-size: 12px; }
+.tracking-timeline { display: grid; gap: 0; padding-top: 20px; }
+.tracking-event { position: relative; display: grid; grid-template-columns: 28px 1fr; gap: 12px; min-height: 70px; }
+.tracking-event:not(:last-child)::before { position: absolute; top: 28px; bottom: 0; left: 13px; width: 1px; background: #E9DAC0; content: ""; }
+.tracking-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #E5EAD9; color: #69784F; }
+.tracking-event:not(.current) .tracking-dot { background: #F3E9D7; color: #A66B36; }
+.tracking-event strong, .tracking-event time, .tracking-event > div > span { display: block; }
+.tracking-event strong { margin: 3px 0 4px; font-size: 13px; }
+.tracking-event time, .tracking-event > div > span { color: #6E5D48; font-size: 11.5px; }
+.tracking-empty { display: grid; place-items: center; align-content: center; min-height: 75vh; gap: 10px; text-align: center; color: #6E5D48; }
+.tracking-empty h1 { margin: 0; font-family: "Fraunces", Georgia, serif; color: #241B12; }
+.tracking-empty p { margin: 0; font-size: 13px; }
+.tracking-message { margin-bottom: 18px; }
 @media (max-width: 700px) { .account-page-shell { display: block; } .account-page-sidebar { width: 100%; padding: 16px 18px; } .account-sidebar-brand { padding-bottom: 16px; } .account-sidebar-label { display: none; } .account-sidebar-user { margin-top: 16px; } .account-back { margin-top: 12px; } .account-page-main { padding: 28px 16px 50px; } .account-page-card { padding: 24px 20px; } .account-tabs { float: none; width: 100%; margin: 0 0 18px; grid-template-columns: repeat(4, 1fr); } .account-tabs button { padding-left: 5px; padding-right: 5px; text-align: center; border-left: 0; border-bottom: 3px solid transparent; } .account-tabs button.active { border-left: 0; border-bottom-color: #A66B36; } .address-field-grid { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .tracking-title-row { align-items: start; flex-direction: column; } .tracking-refresh { width: 100%; justify-content: center; } .tracking-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tracking-panel { padding: 18px; } .tracking-panel-heading { align-items: start; flex-direction: column; } .track-order-hint { display: none; } }
 .login-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 11px; border: 1px solid #54371C; border-radius: 4px; background: transparent; color: #DDB07E; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .mobile-nav-search { display: none; align-items: center; gap: 8px; padding: 9px 11px; border: 1px solid #54371C; border-radius: 4px; background: #FBF6EE; color: #9C8B74; }
 .mobile-nav-search input { width: 100%; border: 0; outline: 0; background: transparent; color: #241B12; font-size: 13px; }

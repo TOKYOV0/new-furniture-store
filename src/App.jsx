@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import FurnitureAdminApp from "./FurnitureAdmin";
-import FurnitureStore, { UserAccountPage } from "./FurnitureStore";
+import FurnitureStore, { TrackingPage, UserAccountPage } from "./FurnitureStore";
 
 export default function App() {
   const [path, setPath] = useState(
@@ -24,6 +24,11 @@ export default function App() {
 
   if (path.startsWith("/account")) {
     return <UserAccountPage onNavigateHome={() => navigate("/")} />;
+  }
+
+  if (path.startsWith("/tracking/")) {
+    const orderId = decodeURIComponent(path.replace("/tracking/", ""));
+    return <TrackingPage orderId={orderId} onNavigateHome={() => navigate("/")} />;
   }
 
   if (path.startsWith("/category/")) {
