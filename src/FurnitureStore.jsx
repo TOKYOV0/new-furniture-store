@@ -14,6 +14,7 @@ const fontBody = `"Inter", "Helvetica Neue", sans-serif`;
 const currency = (n) => Number(n || 0).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=1200&q=80";
 const userInitials = (name = "") => String(name).trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join("") || "U";
+const identityValue = (value) => String(value || "").trim().toLowerCase();
 const emptyAddress = () => ({ label: "Home", house: "", street: "", city: "", state: "", pincode: "", country: "India" });
 const addressValue = (address = {}) => address.value || [address.house, address.street, address.city, address.state, address.pincode].filter(Boolean).join(", ");
 const normalizeAddress = (address = {}) => {
@@ -213,7 +214,9 @@ function OrderHistory({ user }) {
   const [message, setMessage] = useState("");
   const orders = useMemo(() => {
     const grouped = new Map();
-    sales.filter(sale => sale.userId === user.id || sale.customerEmail === user.email).forEach(sale => {
+    const userId = identityValue(user.id);
+    const userEmail = identityValue(user.email);
+    sales.filter(sale => (userId && identityValue(sale.userId) === userId) || (userEmail && identityValue(sale.customerEmail) === userEmail)).forEach(sale => {
       const orderId = sale.orderId || sale.id;
       const order = grouped.get(orderId) || { ...sale, items: [] };
       order.items.push(sale);

@@ -22,6 +22,21 @@ export function getSalesConfig() {
   return read(CONFIG_KEY, { ...defaultSalesConfig });
 }
 
+function identityValue(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function saleKey(sale) {
+  return identityValue(sale?.id || `${sale?.orderId || ""}:${sale?.productId || sale?.productName || ""}`);
+}
+
+function mergeSale(serverSale, localSale) {
+  return Object.fromEntries(Object.keys({ ...localSale, ...serverSale }).map(key => [
+    key,
+    serverSale?.[key] !== undefined && serverSale[key] !== null && serverSale[key] !== "" ? serverSale[key] : localSale?.[key] || ""
+  ]));
+}
+
 export async function recordSale(sale) {
   const sales = getSales();
   const next = [sale, ...sales];
@@ -100,7 +115,13 @@ export async function syncSalesFromSheet() {
   if (!data.ok || !Array.isArray(data.sales)) throw new Error("Invalid Google Sheets response");
   const deleted = new Set(read(DELETED_KEY, []));
   const localSales = getSales();
-  const merged = [...data.sales, ...localSales.filter(localSale => !data.sales.some(serverSale => serverSale.id === localSale.id) && !deleted.has(localSale.orderId || localSale.id))].filter(sale => !deleted.has(sale.orderId || sale.id));
+  const localByKey = new Map(localSales.map(sale => [saleKey(sale), sale]));
+  const serverKeys = new Set(data.sales.map(saleKey));
+  const mergedServerSales = data.sales.map(serverSale => mergeSale(serverSale, localByKey.get(saleKey(serverSale))));
+  const merged = [
+    ...mergedServerSales,
+    ...localSales.filter(localSale => !serverKeys.has(saleKey(localSale)) && !deleted.has(localSale.orderId || localSale.id))
+  ].filter(sale => !deleted.has(sale.orderId || sale.id));
   if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
   window?.dispatchEvent(new CustomEvent(EVENT_NAME));
   return merged;
